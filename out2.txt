@@ -1,0 +1,4 @@
+BROWSER LOG: {'level': 'SEVERE', 'message': 'http://127.0.0.1:5000/static/js/app.js?v=7 99:16 "«Î«Û ß∞‹:" TypeError: Cannot read properties of null (reading \'querySelector\')\n    at renderMarkovChart (http://127.0.0.1:5000/static/js/app.js?v=7:482:82)\n    at renderStatistics (http://127.0.0.1:5000/static/js/app.js?v=7:127:5)\n    at loadStatistics (http://127.0.0.1:5000/static/js/app.js?v=7:94:13)', 'source': 'console-api', 'timestamp': 1772517770185}
+BROWSER LOG: {'level': 'SEVERE', 'message': 'http://127.0.0.1:5000/favicon.ico - Failed to load resource: the server responded with a status of 404 (NOT FOUND)', 'source': 'network', 'timestamp': 1772517774419}
+CANVAS: 300 x 150
+WRAPPER: 9036 x 420

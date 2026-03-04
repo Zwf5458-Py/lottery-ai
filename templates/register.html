@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>✨ 注册 · 澳门六合彩数据分析系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #0f0c29 0%, #1a1333 50%, #24243e 100%);
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            color: #e5e7eb;
+            overflow: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 30% 70%, rgba(80, 200, 120, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 70% 30%, rgba(255, 180, 50, 0.06) 0%, transparent 50%),
+                radial-gradient(circle at 50% 50%, rgba(100, 150, 255, 0.05) 0%, transparent 50%);
+            animation: bgPulse 8s ease-in-out infinite alternate;
+            z-index: 0;
+        }
+
+        @keyframes bgPulse {
+            0% {
+                opacity: 0.6;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
+
+        .register-card {
+            position: relative;
+            z-index: 1;
+            width: 420px;
+            background: rgba(30, 30, 60, 0.85);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(80, 200, 120, 0.2);
+            border-radius: 20px;
+            padding: 42px 40px 36px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(80, 200, 120, 0.1);
+            animation: cardFloat 0.6s ease-out;
+        }
+
+        @keyframes cardFloat {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .register-card h1 {
+            text-align: center;
+            font-size: 1.8rem;
+            font-weight: 800;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #34d399, #60a5fa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .register-card .subtitle {
+            text-align: center;
+            color: #9ca3af;
+            font-size: 0.9rem;
+            margin-bottom: 28px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            color: #34d399;
+            font-weight: 600;
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 14px 18px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1.5px solid rgba(80, 200, 120, 0.2);
+            border-radius: 12px;
+            color: #fff;
+            font-size: 1rem;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        .form-group input:focus {
+            border-color: #34d399;
+            box-shadow: 0 0 20px rgba(80, 200, 120, 0.15);
+            background: rgba(255, 255, 255, 0.09);
+        }
+
+        .form-group input::placeholder {
+            color: #6b7280;
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #059669, #10b981);
+            color: #fff;
+            font-size: 1.1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            letter-spacing: 1px;
+            margin-top: 8px;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(5, 150, 105, 0.4);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .switch-link {
+            text-align: center;
+            margin-top: 24px;
+            color: #9ca3af;
+            font-size: 0.9rem;
+        }
+
+        .switch-link a {
+            color: #34d399;
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.2s;
+        }
+
+        .switch-link a:hover {
+            color: #6ee7b7;
+        }
+
+        .error-msg {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            color: #fca5a5;
+            font-size: 0.9rem;
+            text-align: center;
+            animation: shake 0.3s ease-in-out;
+            display: none;
+        }
+
+        .success-msg {
+            background: rgba(34, 197, 94, 0.15);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            color: #86efac;
+            font-size: 0.9rem;
+            text-align: center;
+            display: none;
+        }
+
+        @keyframes shake {
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            25% {
+                transform: translateX(-5px);
+            }
+
+            75% {
+                transform: translateX(5px);
+            }
+        }
+
+        .logo-icon {
+            text-align: center;
+            font-size: 3rem;
+            margin-bottom: 16px;
+        }
+
+        .trial-badge {
+            text-align: center;
+            margin-top: 16px;
+            padding: 10px;
+            background: rgba(251, 191, 36, 0.1);
+            border: 1px solid rgba(251, 191, 36, 0.2);
+            border-radius: 10px;
+            color: #fbbf24;
+            font-size: 0.82rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="register-card">
+        <div class="logo-icon">✨</div>
+        <h1>创建账号</h1>
+        <p class="subtitle">注册后即可开始使用数据分析功能</p>
+
+        <div class="error-msg" id="error-msg"></div>
+        <div class="success-msg" id="success-msg"></div>
+
+        <form id="registerForm" onsubmit="return handleRegister(event)">
+            <div class="form-group">
+                <label>👤 用户名</label>
+                <input type="text" id="username" placeholder="2-20 个字符" required autocomplete="username">
+            </div>
+            <div class="form-group">
+                <label>🔒 设置密码</label>
+                <input type="password" id="password" placeholder="至少 4 个字符" required autocomplete="new-password">
+            </div>
+            <div class="form-group">
+                <label>🔒 确认密码</label>
+                <input type="password" id="password2" placeholder="再次输入密码" required autocomplete="new-password">
+            </div>
+            <button type="submit" class="btn-primary" id="submitBtn">🎉 注册账号</button>
+        </form>
+
+        <div class="trial-badge">
+            📋 新注册账号默认为体验版，可联系管理员升级 VIP 解锁全部功能
+        </div>
+
+        <div class="switch-link">
+            已有账号？<a href="/login">返回登录</a>
+        </div>
+    </div>
+
+    <script>
+        function showError(msg) {
+            const el = document.getElementById('error-msg');
+            document.getElementById('success-msg').style.display = 'none';
+            el.textContent = msg;
+            el.style.display = 'block';
+            el.style.animation = 'none';
+            setTimeout(() => el.style.animation = 'shake 0.3s ease-in-out', 10);
+        }
+
+        function showSuccess(msg) {
+            document.getElementById('error-msg').style.display = 'none';
+            const el = document.getElementById('success-msg');
+            el.textContent = msg;
+            el.style.display = 'block';
+        }
+
+        async function handleRegister(e) {
+            e.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ 注册中...';
+
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const password2 = document.getElementById('password2').value;
+
+            if (password !== password2) {
+                showError('两次输入的密码不一致');
+                btn.disabled = false;
+                btn.textContent = '🎉 注册账号';
+                return false;
+            }
+
+            try {
+                const res = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showSuccess('🎉 注册成功！正在跳转登录页...');
+                    setTimeout(() => window.location.href = '/login', 1500);
+                } else {
+                    showError(data.error || '注册失败');
+                }
+            } catch (err) {
+                showError('网络错误，请稍后重试');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🎉 注册账号';
+            }
+        }
+    </script>
+</body>
+
+</html>

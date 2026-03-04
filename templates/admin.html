@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🛡️ 后台管理 · 澳门六合彩系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0f0c29 0%, #1a1333 50%, #24243e 100%);
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            color: #e5e7eb;
+        }
+
+        .admin-header {
+            background: rgba(30, 30, 60, 0.9);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(120, 80, 255, 0.15);
+            padding: 16px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .admin-header h1 {
+            font-size: 1.4rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #f59e0b, #ef4444);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .admin-header .nav-links {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .admin-header .nav-links a {
+            color: #a78bfa;
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 6px 16px;
+            border-radius: 8px;
+            border: 1px solid rgba(167, 139, 250, 0.2);
+            transition: all 0.2s;
+        }
+
+        .admin-header .nav-links a:hover {
+            background: rgba(167, 139, 250, 0.1);
+            border-color: rgba(167, 139, 250, 0.4);
+        }
+
+        .admin-container {
+            max-width: 1100px;
+            margin: 32px auto;
+            padding: 0 24px;
+        }
+
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        .stat-card {
+            background: rgba(30, 30, 60, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 14px;
+            padding: 20px 24px;
+            text-align: center;
+        }
+
+        .stat-card .stat-num {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #a78bfa;
+        }
+
+        .stat-card .stat-label {
+            font-size: 0.85rem;
+            color: #9ca3af;
+            margin-top: 4px;
+        }
+
+        .panel {
+            background: rgba(30, 30, 60, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 16px;
+            padding: 28px;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .panel-header h2 {
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 8px;
+        }
+
+        .search-box input {
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            color: #fff;
+            font-size: 0.9rem;
+            outline: none;
+            width: 220px;
+        }
+
+        .search-box input:focus {
+            border-color: #a78bfa;
+        }
+
+        .search-box button {
+            padding: 8px 18px;
+            background: #7c3aed;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .search-box button:hover {
+            background: #6d28d9;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+
+        th,
+        td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        th {
+            color: #9ca3af;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            font-size: 0.9rem;
+        }
+
+        .role-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .role-trial {
+            background: rgba(107, 114, 128, 0.3);
+            color: #9ca3af;
+        }
+
+        .role-vip {
+            background: linear-gradient(135deg, #f59e0b, #f97316);
+            color: #fff;
+        }
+
+        .role-admin {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: #fff;
+        }
+
+        .action-btns {
+            display: flex;
+            gap: 6px;
+        }
+
+        .action-btns button {
+            padding: 5px 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-vip {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.3) !important;
+        }
+
+        .btn-vip:hover {
+            background: rgba(245, 158, 11, 0.35);
+        }
+
+        .btn-trial {
+            background: rgba(107, 114, 128, 0.2);
+            color: #d1d5db;
+            border: 1px solid rgba(107, 114, 128, 0.3) !important;
+        }
+
+        .btn-trial:hover {
+            background: rgba(107, 114, 128, 0.35);
+        }
+
+        .btn-admin {
+            background: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.3) !important;
+        }
+
+        .btn-admin:hover {
+            background: rgba(239, 68, 68, 0.35);
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 20px;
+        }
+
+        .pagination button {
+            padding: 6px 14px;
+            background: rgba(255, 255, 255, 0.06);
+            color: #d1d5db;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .pagination button:hover {
+            background: rgba(167, 139, 250, 0.15);
+            border-color: #a78bfa;
+        }
+
+        .pagination button.active {
+            background: #7c3aed;
+            color: #fff;
+            border-color: #7c3aed;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 48px 0;
+            color: #6b7280;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            z-index: 9999;
+            animation: slideUp 0.3s ease-out;
+            display: none;
+        }
+
+        .toast-success {
+            background: rgba(34, 197, 94, 0.9);
+            color: #fff;
+        }
+
+        .toast-error {
+            background: rgba(239, 68, 68, 0.9);
+            color: #fff;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header class="admin-header">
+        <h1>🛡️ 后台管理控制台</h1>
+        <div class="nav-links">
+            <span style="font-size:0.85rem; color:#d1d5db;">👤 {{ user.username }}</span>
+            <span class="role-badge role-admin">管理员</span>
+            <a href="/">🏠 返回主站</a>
+            <a href="/logout" style="color:#f87171; border-color:rgba(239,68,68,0.3);">🚪 退出</a>
+        </div>
+    </header>
+
+    <div class="admin-container">
+        <!-- 统计卡片 -->
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="stat-num" id="stat-total">-</div>
+                <div class="stat-label">总用户数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-num" id="stat-vip" style="color:#fbbf24;">-</div>
+                <div class="stat-label">VIP 会员</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-num" id="stat-trial" style="color:#9ca3af;">-</div>
+                <div class="stat-label">体验用户</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-num" id="stat-ai-total" style="color:#c084fc;">-</div>
+                <div class="stat-label">全站 AI 模拟总数</div>
+            </div>
+        </div>
+
+        <!-- 用户管理面板 -->
+        <div class="panel">
+            <div class="panel-header">
+                <h2>👥 用户管理</h2>
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="搜索用户名或邮箱..."
+                        onkeyup="if(event.key==='Enter') searchUsers()">
+                    <button onclick="searchUsers()">🔍 搜索</button>
+                </div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>用户名</th>
+                        <th>邮箱</th>
+                        <th>角色</th>
+                        <th>注册时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="userTableBody">
+                    <tr>
+                        <td colspan="6" class="empty-state">加载中...</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="pagination" id="pagination"></div>
+        </div>
+    </div>
+
+    <!-- Toast 提示 -->
+    <div class="toast toast-success" id="toast-success"></div>
+    <div class="toast toast-error" id="toast-error"></div>
+
+    <script>
+        let currentPage = 1;
+        let currentSearch = '';
+
+        function showToast(msg, type = 'success') {
+            const el = document.getElementById('toast-' + type);
+            el.textContent = msg;
+            el.style.display = 'block';
+            setTimeout(() => el.style.display = 'none', 3000);
+        }
+
+        function getRoleBadge(role) {
+            const cls = { trial: 'role-trial', vip: 'role-vip', admin: 'role-admin' };
+            const label = { trial: '体验版', vip: 'VIP', admin: '管理员' };
+            return `<span class="role-badge ${cls[role] || 'role-trial'}">${label[role] || role}</span>`;
+        }
+
+        function getRoleActions(user) {
+            let html = '<div class="action-btns">';
+            // 演示数据生成按钮
+            html += `<button class="btn-trial" style="background:rgba(192,132,252,0.15); color:#c084fc; border:1px solid rgba(192,132,252,0.3) !important;" onclick="seedData(${user.id})" title="生成15条仿真模拟记录">🪄 种子工程</button>`;
+
+            if (user.role === 'admin') {
+                html += '</div>';
+                return html;
+            }
+
+            if (user.role !== 'vip') {
+                html += `<button class="btn-vip" onclick="setRole(${user.id},'vip')">升级 VIP</button>`;
+            }
+            if (user.role !== 'trial') {
+                html += `<button class="btn-trial" onclick="setRole(${user.id},'trial')">降为体验</button>`;
+            }
+            html += `<button class="btn-admin" onclick="setRole(${user.id},'admin')">设管理员</button>`;
+            html += '</div>';
+            return html;
+        }
+
+        async function loadUsers(page = 1) {
+            currentPage = page;
+            try {
+                const url = `/api/admin/users?page=${page}&search=${encodeURIComponent(currentSearch)}`;
+                const res = await fetch(url);
+                const data = await res.json();
+
+                if (!data.success) {
+                    showToast(data.error || '加载失败', 'error');
+                    return;
+                }
+
+                // 更新统计
+                if (page === 1 && !currentSearch) {
+                    document.getElementById('stat-total').textContent = data.total;
+                    const vipCount = data.users.filter(u => u.role === 'vip').length;
+                    const trialCount = data.users.filter(u => u.role === 'trial').length;
+                    // 简单估算（首页数据）
+                    document.getElementById('stat-vip').textContent = vipCount;
+                    document.getElementById('stat-trial').textContent = trialCount;
+                }
+
+                // 渲染表格
+                const tbody = document.getElementById('userTableBody');
+                if (data.users.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">暂无用户数据</td></tr>';
+                } else {
+                    tbody.innerHTML = data.users.map(u => `
+                        <tr>
+                            <td style="color:#6b7280;">#${u.id}</td>
+                            <td style="font-weight:600;">${u.username}</td>
+                            <td style="color:#9ca3af;">${u.email || '—'}</td>
+                            <td>${getRoleBadge(u.role)}</td>
+                            <td style="color:#9ca3af; font-size:0.82rem;">${u.created_at || '—'}</td>
+                            <td>${getRoleActions(u)}</td>
+                        </tr>
+                    `).join('');
+                }
+
+                // 分页
+                renderPagination(data.page, data.total_pages);
+
+                // 加载全站统计
+                loadGlobalStats();
+
+            } catch (e) {
+                showToast('网络错误: ' + e.message, 'error');
+            }
+        }
+
+        async function loadGlobalStats() {
+            try {
+                const res = await fetch('/api/admin/global-stats');
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('stat-ai-total').textContent = data.total_ai_count;
+                }
+            } catch (e) { }
+        }
+
+        async function seedData(userId) {
+            if (!confirm('确定要为该用户注入 15 条仿真的 AI 模拟记录吗？（仅用于功能演示）')) return;
+            try {
+                const res = await fetch('/api/admin/seed-data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('✅ ' + data.message);
+                    loadGlobalStats();
+                } else {
+                    showToast(data.error, 'error');
+                }
+            } catch (e) {
+                showToast('注入失败', 'error');
+            }
+        }
+
+        function renderPagination(page, totalPages) {
+            const el = document.getElementById('pagination');
+            if (totalPages <= 1) { el.innerHTML = ''; return; }
+            let html = '';
+            html += `<button ${page <= 1 ? 'disabled' : ''} onclick="loadUsers(${page - 1})">‹ 上一页</button>`;
+            for (let i = 1; i <= totalPages; i++) {
+                html += `<button class="${i === page ? 'active' : ''}" onclick="loadUsers(${i})">${i}</button>`;
+            }
+            html += `<button ${page >= totalPages ? 'disabled' : ''} onclick="loadUsers(${page + 1})">下一页 ›</button>`;
+            el.innerHTML = html;
+        }
+
+        function searchUsers() {
+            currentSearch = document.getElementById('searchInput').value.trim();
+            loadUsers(1);
+        }
+
+        async function setRole(userId, role) {
+            const labels = { trial: '体验版', vip: 'VIP', admin: '管理员' };
+            if (!confirm(`确定要将该用户角色设为「${labels[role]}」吗？`)) return;
+            try {
+                const res = await fetch(`/api/admin/users/${userId}/role`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ role })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`✅ ${data.message}`);
+                    loadUsers(currentPage);
+                } else {
+                    showToast(data.error || '操作失败', 'error');
+                }
+            } catch (e) {
+                showToast('网络错误', 'error');
+            }
+        }
+
+        // 初始加载
+        loadUsers(1);
+    </script>
+</body>
+
+</html>

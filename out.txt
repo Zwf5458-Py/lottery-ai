@@ -1,0 +1,4 @@
+BROWSER LOG: {'level': 'SEVERE', 'message': "http://127.0.0.1:5000/static/js/app.js?v=7 760:16 Uncaught TypeError: Cannot read properties of null (reading 'addEventListener')", 'source': 'javascript', 'timestamp': 1772517403875}
+BROWSER LOG: {'level': 'SEVERE', 'message': 'http://127.0.0.1:5000/favicon.ico - Failed to load resource: the server responded with a status of 404 (NOT FOUND)', 'source': 'network', 'timestamp': 1772517407088}
+CANVAS: 300 x 150
+WRAPPER: 676 x 420

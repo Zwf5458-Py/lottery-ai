@@ -1,0 +1,13 @@
+cat > .gitignore <<'EOF'
+.env
+.env.example
+__pycache__/
+*.pyc
+logs/
+*.log
+data/*.db
+data/user_dbs/*.db
+browser_logs.json
+.DS_Store
+Thumbs.db
+EOF

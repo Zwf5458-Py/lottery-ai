@@ -1,0 +1,18 @@
+{
+  "ai": {
+    "platform": "google",
+    "model": "gemini-3-pro-preview",
+    "api_key": "AIzaSyCNqfB6cErVYkbmOGeTbmf1OQJo-ykpoUg"
+  },
+  "chart_periods": {
+    "zodiac_trend": 200,
+    "odd_even": 150,
+    "big_small": 150,
+    "markov": 150,
+    "hot_cold": 100,
+    "tail": 100,
+    "bayesian": 90,
+    "lstm": 2113,
+    "ai_raw_data": 300
+  }
+}

@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="澳门六合彩历史数据统计分析与模拟开奖系统，提供冷热号、奇偶比、大小比等客观数据统计。">
+    <title>🎰 澳门六合彩 · 数据分析与模拟开奖系统</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script>
+        // 从后端注入当前用户信息，使用字符串再 Parse 避免编辑器语法报错
+        window.__USER__ = JSON.parse('{{ user | tojson | safe if user else "{}" }}');
+    </script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=3">
+</head>
+
+<body>
+
+    <!-- ===== 免责声明横幅 — 不可关闭 ===== -->
+    <div id="disclaimer-banner" class="disclaimer-banner">
+        <div class="disclaimer-icon">⚠️</div>
+        <p class="disclaimer-text">
+            <strong>免责声明：</strong>彩票开奖为独立随机事件，本程序的数据分析仅供统计学参考，任何AI模型均无法预测未来开奖结果，请理性对待。
+        </p>
+    </div>
+
+    <!-- ===== 导航栏 ===== -->
+    <nav class="navbar">
+        <div class="nav-brand">
+            <span class="brand-icon">🎰</span>
+            <h1>六合彩智能分析系统</h1>
+        </div>
+        <div class="nav-controls">
+            <div class="lottery-type-selector">
+                <button class="type-btn" data-type="macaujc">澳门六合彩</button>
+                <button class="type-btn active" data-type="macaujc2">新澳门六合彩</button>
+            </div>
+            <div class="nav-tabs">
+                <button class="nav-tab active" data-tab="statistics" id="tab-stats">📊 统计分析</button>
+                <button class="nav-tab" data-tab="simulator" id="tab-sim">🎲 智能模拟</button>
+                <button class="nav-tab" data-tab="history" id="tab-history">📋 历史记录</button>
+                <button class="nav-tab" data-tab="ai-history" id="tab-ai-history" style="color: #c084fc;">📂 AI
+                    历史档案</button>
+            </div>
+            <button class="settings-btn" id="btn-open-settings" title="系统设置">⚙️</button>
+            <!-- 用户身份栏 -->
+            <div class="user-bar"
+                style="display:flex; align-items:center; gap:10px; margin-left:14px; padding-left:14px; border-left:1px solid rgba(255,255,255,0.12);">
+                {% if user %}
+                <span style="font-size:0.88rem; color:#d1d5db; white-space:nowrap;">
+                    👤 {{ user.username }}
+                </span>
+                {% if user.role == 'admin' %}
+                <span
+                    style="background:linear-gradient(135deg,#ef4444,#dc2626); color:#fff; font-size:0.72rem; font-weight:800; padding:3px 10px; border-radius:8px; letter-spacing:0.5px;">管理员</span>
+                <a href="/admin"
+                    style="display:inline-flex; align-items:center; gap:3px; color:#f59e0b; font-size:0.82rem; font-weight:600; text-decoration:none; padding:4px 12px; border-radius:8px; border:1px solid rgba(245,158,11,0.25); transition:all 0.2s; white-space:nowrap;"
+                    onmouseover="this.style.background='rgba(245,158,11,0.15)'"
+                    onmouseout="this.style.background='transparent'" title="后台管理">🛡️ 后台</a>
+                {% elif user.role == 'vip' %}
+                <span
+                    style="background:linear-gradient(135deg,#f59e0b,#f97316); color:#fff; font-size:0.72rem; font-weight:800; padding:3px 10px; border-radius:8px; letter-spacing:0.5px;">VIP</span>
+                {% else %}
+                <span
+                    style="background:rgba(107,114,128,0.3); color:#9ca3af; font-size:0.72rem; font-weight:600; padding:3px 10px; border-radius:8px;">体验版</span>
+                {% endif %}
+                <a href="/logout"
+                    style="display:inline-flex; align-items:center; gap:4px; background:rgba(239,68,68,0.15); color:#f87171; font-size:0.82rem; font-weight:600; text-decoration:none; padding:5px 14px; border-radius:8px; border:1px solid rgba(239,68,68,0.25); transition:all 0.2s; white-space:nowrap;"
+                    onmouseover="this.style.background='rgba(239,68,68,0.3)'"
+                    onmouseout="this.style.background='rgba(239,68,68,0.15)'" title="退出登录">🚪 退出</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <!-- ===== 主内容区 ===== -->
+    <main class="main-content">
+
+        <!-- 加载状态 -->
+        <div id="loading-overlay" class="loading-overlay">
+            <div class="loading-spinner">
+                <div class="spinner-ball"></div>
+                <div class="spinner-ball"></div>
+                <div class="spinner-ball"></div>
+            </div>
+            <p class="loading-text">正在加载数据...</p>
+        </div>
+
+        <!-- ==================== 统计分析面板 ==================== -->
+        <section id="section-statistics" class="content-section active">
+
+            <!-- 概览卡片 -->
+            <div class="overview-cards">
+                <div class="stat-card glass">
+                    <div class="stat-card-icon">📈</div>
+                    <div class="stat-card-info">
+                        <span class="stat-label">总开奖期数</span>
+                        <span class="stat-value" id="total-draws">--</span>
+                    </div>
+                </div>
+                <div class="stat-card glass">
+                    <div class="stat-card-icon">🔥</div>
+                    <div class="stat-card-info">
+                        <span class="stat-label">最热号码</span>
+                        <span class="stat-value" id="hottest-number">--</span>
+                    </div>
+                </div>
+                <div class="stat-card glass">
+                    <div class="stat-card-icon">❄️</div>
+                    <div class="stat-card-info">
+                        <span class="stat-label">最冷号码</span>
+                        <span class="stat-value" id="coldest-number">--</span>
+                    </div>
+                </div>
+                <div class="stat-card glass" id="card-latest-zodiac">
+                    <div class="stat-card-icon" id="latest-zodiac-icon">🎰</div>
+                    <div class="stat-card-info">
+                        <span class="stat-label">上期开奖特码</span>
+                        <span class="stat-value" id="latest-special-info">加载中...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 图表区域 -->
+            <div class="charts-grid">
+                <!-- 号码频率分布 -->
+                <div class="chart-card glass" id="chart-card-frequency">
+                    <h3 class="chart-title">📊 号码出现频率分布</h3>
+                    <div class="chart-container">
+                        <canvas id="chart-frequency"></canvas>
+                    </div>
+                </div>
+
+                <!-- 冷热号排行 -->
+                <div class="chart-card glass" id="chart-card-hotcold">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+                        <h3 class="chart-title" style="margin-bottom: 0;">🔥❄️ 冷热分析</h3>
+                        <div class="algorithm-toggle"
+                            style="display: inline-flex; background: rgba(0,0,0,0.3); padding: 4px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);">
+                            <label style="cursor: pointer; margin: 0;">
+                                <input type="radio" name="hotcold_mode" value="number" style="display: none;">
+                                <span class="toggle-btn"
+                                    style="display: inline-block; padding: 6px 14px; font-size: 0.85rem; font-weight: 600; color: #9ca3af; border-radius: 6px; transition: all 0.3s ease;">📊
+                                    号码 TOP10</span>
+                            </label>
+                            <label style="cursor: pointer; margin: 0;">
+                                <input type="radio" name="hotcold_mode" value="color" checked style="display: none;">
+                                <span class="toggle-btn"
+                                    style="display: inline-block; padding: 6px 14px; font-size: 0.85rem; font-weight: 600; color: #9ca3af; border-radius: 6px; transition: all 0.3s ease;">🎨
+                                    波色推测</span>
+                            </label>
+                        </div>
+                        <style>
+                            input[name="hotcold_mode"]:checked+.toggle-btn {
+                                background: linear-gradient(135deg, rgba(239, 68, 68, 0.7), rgba(245, 158, 11, 0.7));
+                                color: #ffffff;
+                                box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+                            }
+                        </style>
+                    </div>
+                    <!-- 号码冷热容器 (默认隐藏) -->
+                    <div class="hot-cold-container" id="number-hotcold-view" style="display: none;">
+                        <div class="hot-cold-column">
+                            <h4 class="column-title hot-title">🔥 热号</h4>
+                            <div id="hot-numbers" class="number-rank-list"></div>
+                        </div>
+                        <div class="hot-cold-column">
+                            <h4 class="column-title cold-title">❄️ 冷号</h4>
+                            <div id="cold-numbers" class="number-rank-list"></div>
+                        </div>
+                    </div>
+                    <!-- 波色冷热容器 -->
+                    <div id="color-hotcold-view"></div>
+                </div>
+
+                <!-- 奇偶比分布 -->
+                <div class="chart-card glass">
+                    <h3 class="chart-title">⚖️ 特码单双连号（长龙）频次</h3>
+                    <div class="chart-container">
+                        <canvas id="chart-odd-even"></canvas>
+                    </div>
+                </div>
+
+                <!-- 大小比分布 -->
+                <div class="chart-card glass">
+                    <h3 class="chart-title">📐 特码大小连号（长龙）频次</h3>
+                    <div class="chart-container">
+                        <canvas id="chart-big-small"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-card glass">
+                    <h3 class="chart-title">🐾 特码生肖路单</h3>
+                    <div
+                        style="display: flex; position: relative; width: 100%; margin-top: 12px; border-radius: 8px; overflow: hidden; background: rgba(0,0,0,0.1);">
+                        <!-- 固定生肖标签列（JS动态注入） -->
+                        <div id="zodiac-y-labels"
+                            style="width: 36px; flex-shrink: 0; position: relative; z-index: 10; background: var(--bg-card); border-right: 1px solid rgba(255,255,255,0.1);">
+                        </div>
+                        <!-- 可滚动图表区 -->
+                        <div id="zodiac-scroll-wrapper" style="flex: 1; overflow-x: auto; overflow-y: hidden;">
+                            <div id="zodiac-chart-container" style="min-width: 100%; height: 340px;">
+                                <canvas id="chart-zodiac"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div
+                        style="text-align: center; color: var(--text-secondary); font-size: 11px; margin-top: 16px; letter-spacing: 1px;">
+                        ← 左右滑动查阅历史走势 · 最右侧 = 最新特码 →</div>
+                </div>
+
+                <!-- 雷达图：马尔可夫链状态转移 (新增) -->
+                <div class="chart-card glass">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+                        <h3 class="chart-title" style="margin-bottom: 0;">🎯 马尔可夫链(Markov Chain)状态转移概型</h3>
+
+                        <!-- 算法维度切换 Toggle -->
+                        <div class="algorithm-toggle"
+                            style="display: inline-flex; background: rgba(0,0,0,0.3); padding: 4px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);">
+                            <label style="cursor: pointer; margin: 0; position: relative;">
+                                <input type="radio" name="markov_mode" value="zodiac" checked style="display: none;">
+                                <span class="toggle-btn"
+                                    style="display: inline-block; padding: 6px 14px; font-size: 0.85rem; font-weight: 600; color: #9ca3af; border-radius: 6px; transition: all 0.3s ease;">🐲
+                                    生肖关联</span>
+                            </label>
+                            <label style="cursor: pointer; margin: 0; position: relative;">
+                                <input type="radio" name="markov_mode" value="color" style="display: none;">
+                                <span class="toggle-btn"
+                                    style="display: inline-block; padding: 6px 14px; font-size: 0.85rem; font-weight: 600; color: #9ca3af; border-radius: 6px; transition: all 0.3s ease;">🎨
+                                    波色推演</span>
+                            </label>
+                        </div>
+                        <style>
+                            input[name="markov_mode"]:checked+.toggle-btn {
+                                background: linear-gradient(135deg, rgba(79, 70, 229, 0.8), rgba(67, 56, 202, 0.8));
+                                color: #ffffff;
+                                box-shadow: 0 2px 8px rgba(79, 70, 229, 0.4);
+                            }
+                        </style>
+                    </div>
+
+                    <p style="font-size: 0.75rem; color: #9ca3af; margin-bottom: 8px; line-height: 1.5;">
+                        基于海量历史数据衍生。展示当上一期特码开出中心圆所标识目标时，历史上紧接着下一期开出外围各维度的相对概率权重。雷达波峰越高，历史跃迁倾向越强。
+                    </p>
+                    <div style="position: relative; width: 100%; height: 420px;">
+                        <canvas id="chart-markov-radar"></canvas>
+                    </div>
+                </div>
+
+                <!-- 深度学习 LSTM -->
+                <div class="chart-card glass" id="chart-card-lstm">
+                    <h3 class="chart-title">🧠 深度学习：长短期记忆网络 (LSTM)</h3>
+                    <p style="font-size: 0.75rem; color: #9ca3af; margin-bottom: 8px; line-height: 1.5;">
+                        <strong
+                            class="text-green-400">【非线性模式挖掘】</strong>将生肖走势放入时间序列网络，寻找肉眼难辨的复杂周期。<strong>局限性说明：</strong>遇到纯随机噪音时，模型极易发生“过拟合”从而导致推演失效。
+                    </p>
+                    <div style="position: relative; width: 100%; height: 360px;">
+                        <canvas id="chart-lstm"></canvas>
+                    </div>
+                </div>
+
+                <!-- 贝叶斯推断 -->
+                <div class="chart-card glass" id="chart-card-bayesian">
+                    <h3 class="chart-title">⚖️ 贝叶斯推断 (Bayesian Inference)</h3>
+                    <p style="font-size: 0.75rem; color: #9ca3af; margin-bottom: 8px; line-height: 1.5;">
+                        <strong
+                            class="text-blue-400">【动态概率更新】</strong>结合历史基础概率（先验），利用最新遗漏极值（新证据）不断修正后验概率。推算生肖在下期“触底反弹”的条件概率权重。
+                    </p>
+                    <div style="position: relative; width: 100%; height: 380px;">
+                        <canvas id="chart-bayesian"></canvas>
+                    </div>
+                </div>
+
+                <!-- 尾数分布 -->
+                <div class="chart-card glass">
+                    <h3 class="chart-title">🔢 尾数分布</h3>
+                    <div class="chart-container">
+                        <canvas id="chart-tail"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== 模拟开奖面板 ==================== -->
+        <section id="section-simulator" class="content-section">
+
+            <div class="simulator-wrapper">
+
+                <!-- 数据新鲜度状态 -->
+                <div class="sim-data-status glass" id="sim-data-status">
+                    <div class="data-status-header">
+                        <h3>📡 数据同步状态</h3>
+                        <button id="btn-sync-data" class="btn-sync" title="同步最新数据">🔄 同步最新</button>
+                    </div>
+                    <div class="data-status-info" id="data-status-info">
+                        <span class="status-dot" id="status-dot">●</span>
+                        <span id="data-status-text">检查中...</span>
+                    </div>
+                </div>
+
+                <!-- 模拟控制区 -->
+                <div class="sim-control glass">
+                    <h2 class="sim-title">🧠 AI 智能模拟开奖</h2>
+                    <p class="sim-description">基于多维统计加权叠加 + Gemini AI 概率推断，综合分析最有可能出现的号码组合。</p>
+
+                    <!-- 加权维度勾选 -->
+                    <div class="sim-dimensions">
+                        <h4 class="dim-title">📐 加权维度选择 <span class="dim-hint">(勾选生效)</span></h4>
+                        <div class="dim-checkboxes">
+                            <label class="dim-checkbox">
+                                <input type="checkbox" name="dim" value="big_small" checked>
+                                <span class="dim-label">📊 大小走势</span>
+                            </label>
+                            <label class="dim-checkbox">
+                                <input type="checkbox" name="dim" value="odd_even" checked>
+                                <span class="dim-label">🔢 单双走势</span>
+                            </label>
+                            <label class="dim-checkbox">
+                                <input type="checkbox" name="dim" value="hot_cold" checked>
+                                <span class="dim-label">🔥 冷热频率</span>
+                            </label>
+                            <label class="dim-checkbox">
+                                <input type="checkbox" name="dim" value="tail" checked>
+                                <span class="dim-label">🎯 尾数分布</span>
+                            </label>
+                            <label class="dim-checkbox">
+                                <input type="checkbox" name="dim" value="color" checked>
+                                <span class="dim-label">🎨 波色推测</span>
+                            </label>
+
+                            <label class="dim-checkbox">
+                                <input type="checkbox" name="dim" value="markov" checked>
+                                <span class="dim-label">🕸️ 马尔可夫链</span>
+                            </label>
+                            <label class="dim-checkbox">
+                                <input type="checkbox" name="dim" value="consecutive" checked>
+                                <span class="dim-label">📈 路单连涨防跌</span>
+                            </label>
+                            <label class="dim-checkbox">
+                                <input type="checkbox" name="dim" value="bayesian" checked>
+                                <span class="dim-label">⚖️ 贝叶斯推断</span>
+                            </label>
+                            <label class="dim-checkbox">
+                                <input type="checkbox" name="dim" value="lstm" checked>
+                                <span class="dim-label">🧠 LSTM 走势</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- 模式选择 & 开始按钮 -->
+                    <div class="sim-options">
+                        <div class="sim-mode-buttons">
+                            <button id="btn-ai-simulate" class="btn-simulate btn-ai">
+                                <span class="btn-text">🤖 AI 智能分析</span>
+                                <span class="btn-loading" style="display:none;">⏳ AI 分析中...</span>
+                            </button>
+                            <button id="btn-weighted-simulate" class="btn-simulate btn-weighted">
+                                <span class="btn-text">🎲 传统加权模拟</span>
+                                <span class="btn-loading" style="display:none;">⏳ 生成中...</span>
+                            </button>
+                            <button id="btn-zodiac-simulate" class="btn-simulate"
+                                style="background: linear-gradient(135deg, #a855f7, #7c3aed); box-shadow: 0 4px 15px rgba(168, 85, 247, 0.3);">
+                                <span class="btn-text">🐲 AI 生肖推算</span>
+                                <span class="btn-loading" style="display:none;">⏳ 推算中...</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI 生肖推算结果展示 -->
+                <div id="sim-zodiac-result" class="sim-result glass"
+                    style="display:none; border: 1px solid rgba(168, 85, 247, 0.3);">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h3 style="color: #c084fc; margin: 0;">🐲 AI 生肖推算结果</h3>
+                        <span class="ai-confidence" id="zodiac-confidence"
+                            style="background: rgba(168,85,247,0.2); border-color: rgba(168,85,247,0.4);"></span>
+                    </div>
+                    <div id="zodiac-predictions"
+                        style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px;"></div>
+                    <div id="zodiac-analysis-text" class="ai-analysis-text" style="border-color: rgba(168,85,247,0.2);">
+                    </div>
+                </div>
+
+                <!-- AI 分析结果展示 -->
+                <div id="sim-ai-result" class="sim-ai-result glass" style="display:none;">
+                    <div class="ai-result-header">
+                        <h3>🤖 AI 智能分析结果</h3>
+                        <span class="ai-confidence" id="ai-confidence">置信度: --</span>
+                    </div>
+                    <div class="ai-result-balls" id="ai-result-balls"></div>
+                    <div class="ai-analysis-text" id="ai-analysis-text"></div>
+                </div>
+
+                <!-- 对比：传统加权结果 -->
+                <div id="sim-weighted-result" class="sim-result glass" style="display:none;">
+                    <h3>🎲 传统加权结果</h3>
+                    <div class="result-balls" id="weighted-result-balls"></div>
+                </div>
+
+                <!-- 开奖动画区 -->
+                <div id="sim-animation" class="sim-animation glass" style="display:none;">
+                    <h3>🎱 摇号中...</h3>
+                    <div class="rolling-balls" style="justify-content: center;">
+                        <div class="lottery-ball special rolling">?</div>
+                    </div>
+                </div>
+
+                <!-- 单期结果展示 -->
+                <div id="sim-single-result" class="sim-result glass" style="display:none;">
+                    <h3>🎊 开奖结果</h3>
+                    <div class="result-balls" id="result-balls"></div>
+                </div>
+
+                <!-- 批量结果展示 -->
+                <div id="sim-batch-result" class="sim-batch glass" style="display:none;">
+                    <h3>📊 批量模拟结果</h3>
+                    <div class="batch-summary" id="batch-summary"></div>
+                    <div class="batch-draws-container">
+                        <h4>最近 20 期结果</h4>
+                        <div class="batch-draws-list" id="batch-draws-list"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== 历史记录面板 ==================== -->
+        <section id="section-history" class="content-section">
+            <div class="history-wrapper glass">
+                <h2 class="history-title">📋 历史开奖记录</h2>
+                <div class="history-table-container">
+                    <table class="history-table" id="history-table">
+                        <thead>
+                            <tr>
+                                <th>期号</th>
+                                <th>日期</th>
+                                <th>特码</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-tbody">
+                        </tbody>
+                    </table>
+                </div>
+                <div class="pagination" id="pagination"></div>
+            </div>
+        </section>
+
+        <!-- ==================== AI 预测历史记录面板 ==================== -->
+        <section id="section-ai-history" class="content-section">
+            <div class="history-wrapper glass" style="max-width: 1000px; margin: 0 auto;">
+                <div class="history-header"
+                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <h2 class="history-title" style="margin-bottom: 0;">📂 AI 深度分析档案</h2>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary);">记录所有通过大模型智能推算的详尽解析</div>
+                </div>
+
+                <div class="ai-history-container" id="ai-history-container"
+                    style="display: flex; flex-direction: column; gap: 20px;">
+                    <!-- 动态插入的记录卡片 -->
+                    <div style="text-align: center; color: var(--text-secondary); padding: 40px;">
+                        加载中...
+                    </div>
+                </div>
+
+                <div class="pagination ai-pagination" id="ai-pagination" style="margin-top: 24px;"></div>
+            </div>
+        </section>
+
+        <!-- ==================== AI 预测历史记录面板 ==================== -->
+        <section id="section-ai-history" class="content-section" style="display: none;">
+            <div class="history-wrapper glass" style="max-width: 1000px; margin: 0 auto; padding: 24px;">
+                <div class="history-header"
+                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 16px;">
+                    <h2 class="history-title" style="margin-bottom: 0; font-size: 1.5rem; color: #c084fc;">📂 AI 深度分析档案
+                    </h2>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary);">记录所有通过大模型智能推算的详尽解析 (可手动删除)</div>
+                </div>
+
+                <div class="ai-history-container" id="ai-history-container"
+                    style="display: flex; flex-direction: column; gap: 24px;">
+                    <!-- 动态插入的记录卡片 -->
+                    <div style="text-align: center; color: var(--text-secondary); padding: 40px;">
+                        暂无 AI 智能推算的历史归档数据
+                    </div>
+                </div>
+
+                <div class="pagination ai-pagination" id="ai-pagination"
+                    style="margin-top: 32px; display: flex; justify-content: center;"></div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ===== 页脚 ===== -->
+    <footer class="footer">
+        <p>📊 本系统仅用于历史数据统计分析研究 · 随机模拟采用 secrets.SystemRandom 加密级算法</p>
+        <p>⚠️ 彩票开奖为独立随机事件，数据分析不构成任何投注建议</p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=18"></script>
+
+    <!-- 设置弹窗 Modal -->
+    <div id="settings-modal" class="settings-modal" style="display:none;">
+        <div class="settings-overlay" id="settings-overlay"></div>
+        <div class="settings-panel">
+            <div class="settings-header">
+                <h2>⚙️ 系统设置</h2>
+                <button class="settings-close" id="btn-close-settings">&times;</button>
+            </div>
+            <div class="settings-body">
+                <div class="settings-section">
+                    <h3>🤖 AI 模型配置</h3>
+                    <div class="settings-row">
+                        <label>模型平台</label>
+                        <select id="set-ai-platform">
+                            <option value="google">Google Gemini</option>
+                            <option value="openai">OpenAI</option>
+                        </select>
+                    </div>
+                    <div class="settings-row">
+                        <label>模型名称</label>
+                        <select id="set-ai-model">
+                            <option value="gemini-2.5-pro">Gemini 2.5 Pro (稳定版)</option>
+                            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                            <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (最新推荐)</option>
+                            <option value="gemini-3-pro-preview">Gemini 3 Pro</option>
+                            <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
+                        </select>
+                    </div>
+                    <div class="settings-row">
+                        <label>API Key</label>
+                        <input type="password" id="set-ai-key" placeholder="输入你的 API Key">
+                        <small id="set-ai-key-hint" class="text-gray-500"></small>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h3>📊 统计图表期数</h3>
+                    <div class="settings-row"><label>生肖路单</label><input type="number" id="set-zodiac-trend" min="10"
+                            max="1000" step="10"></div>
+                    <div class="settings-row"><label>单双 K 线</label><input type="number" id="set-odd-even" min="10"
+                            max="1000" step="10"></div>
+                    <div class="settings-row"><label>大小 K 线</label><input type="number" id="set-big-small" min="10"
+                            max="1000" step="10"></div>
+                    <div class="settings-row"><label>冷热号统计</label><input type="number" id="set-hot-cold" min="10"
+                            max="1000" step="10"></div>
+                    <div class="settings-row"><label>尾数统计</label><input type="number" id="set-tail" min="10" max="1000"
+                            step="10"></div>
+                    <div class="settings-row"><label>贝叶斯推断</label><input type="number" id="set-bayesian" min="10"
+                            max="1000" step="10"></div>
+                    <div class="settings-row"><label>LSTM 模拟</label><input type="number" id="set-lstm" min="10"
+                            max="1000" step="10"></div>
+                    <div class="settings-row"><label>马尔可夫链</label><input type="number" id="set-markov" min="0"
+                            max="10000" step="100" title="0 = 全量历史"><small class="text-gray-500">0 = 使用全量历史数据</small>
+                    </div>
+                    <div class="settings-row"><label>AI 原始数据</label><input type="number" id="set-ai-raw" min="10"
+                            max="2000" step="50"></div>
+                </div>
+                <!-- 账号管理区块 -->
+                <div class="settings-section">
+                    <h3>👤 账号管理</h3>
+                    <div class="settings-row">
+                        <label>绑定邮箱</label>
+                        <div style="display:flex; gap:8px; flex:1;">
+                            <input type="email" id="set-email" placeholder="输入邮箱地址（用于找回密码）" style="flex:1;">
+                            <button type="button" onclick="saveEmail()"
+                                style="padding:6px 16px; background:#7c3aed; color:#fff; border:none; border-radius:8px; font-size:0.85rem; font-weight:600; cursor:pointer; white-space:nowrap;">保存邮箱</button>
+                        </div>
+                    </div>
+                    <div class="settings-row">
+                        <label>旧密码</label>
+                        <input type="password" id="set-old-pwd" placeholder="输入当前密码">
+                    </div>
+                    <div class="settings-row">
+                        <label>新密码</label>
+                        <div style="display:flex; gap:8px; flex:1;">
+                            <input type="password" id="set-new-pwd" placeholder="输入新密码（至少4位）" style="flex:1;">
+                            <button type="button" onclick="changePassword()"
+                                style="padding:6px 16px; background:#ef4444; color:#fff; border:none; border-radius:8px; font-size:0.85rem; font-weight:600; cursor:pointer; white-space:nowrap;">修改密码</button>
+                        </div>
+                    </div>
+                    <small style="color:#6b7280; display:block; margin-top:8px;">💡 绑定邮箱后可用于找回密码。修改密码需先验证旧密码。</small>
+                </div>
+            </div>
+            <div class="settings-footer">
+                <button class="btn-save-settings" id="btn-save-settings">💾 保存设置</button>
+            </div>
+        </div>
+    </div>
+
+</body>
+
+</html>
