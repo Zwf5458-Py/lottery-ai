@@ -185,7 +185,7 @@ def _call_gemini(prompt: str, api_key: str, model_name: str, stats_summary: dict
         import pandas as pd
         
         conn = get_db_connection()
-        df = pd.read_sql_query(f"SELECT draw_number, special_num FROM lottery_history WHERE lottery_type='{lottery_type}' ORDER BY draw_date DESC, draw_number DESC LIMIT 300", conn)
+        df = pd.read_sql_query("SELECT draw_number, special_num FROM lottery_history WHERE lottery_type=? ORDER BY draw_date DESC, draw_number DESC LIMIT 300", conn, params=(lottery_type,))
         conn.close()
         z_map = get_zodiac_mapping(lottery_type)
         
