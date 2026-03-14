@@ -1,13 +1,75 @@
-cat > .gitignore <<'EOF'
+# Environment
 .env
 .env.example
+.env.local
+
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs
 logs/
 *.log
+
+# Database (keep structure, ignore data)
 data/*.db
 data/user_dbs/*.db
-browser_logs.json
+!data/.gitkeep
+
+# Cache
+data/cache/
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.cover
+
+# Secrets
+data/.secret_key
+
+# OS
 .DS_Store
 Thumbs.db
-EOF
+Desktop.ini
+
+# Browser logs
+browser_logs.json
+
+# Coverage
+coverage.xml
+*.cover
+
+# Jupyter
+.ipynb_checkpoints/
