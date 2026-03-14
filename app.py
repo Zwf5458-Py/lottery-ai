@@ -358,6 +358,15 @@ from modules.crypto_utils import ensure_encryption_key
 
 ensure_encryption_key()
 
+# ==================== 注册 Blueprint ====================
+# 注：Blueprint 文件已创建在 blueprints/ 目录，但目前使用原有的路由
+# 完整迁移后可取消注释以下代码：
+# from blueprints import auth_bp, pages_bp, api_bp, admin_bp
+# app.register_blueprint(auth_bp)
+# app.register_blueprint(pages_bp)
+# app.register_blueprint(api_bp, url_prefix='/api')
+# app.register_blueprint(admin_bp)
+
 
 # ==================== 认证路由 ====================
 
