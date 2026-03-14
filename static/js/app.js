@@ -10,8 +10,94 @@ const state = {
     statisticsLoaded: false,
     historyPage: 1,
     historyTotalPages: 1,
+    aiHistoryPage: 1,
     charts: {}  // 存储 Chart.js 实例，防止重复创建
 };
+
+// ==================== Chart.js 全局性能优化 ====================
+if (typeof Chart !== 'undefined') {
+    Chart.defaults.animation = false;
+    Chart.defaults.animations = {};
+    Chart.defaults.transitions = { active: { animation: { duration: 0 } } };
+    Chart.defaults.hover.animationDuration = 0;
+    Chart.defaults.responsiveAnimationDuration = 0;
+    Chart.defaults.elements.point.radius = 2;
+    Chart.defaults.elements.point.hoverRadius = 4;
+    Chart.defaults.elements.line.tension = 0.3;
+}
+
+let centerConfirmModal = null;
+
+function ensureCenterConfirmModal() {
+    if (centerConfirmModal) return centerConfirmModal;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'center-confirm-overlay';
+    overlay.style.cssText = [
+        'position:fixed',
+        'inset:0',
+        'display:none',
+        'align-items:center',
+        'justify-content:center',
+        'background:rgba(2,6,23,0.62)',
+        'backdrop-filter:blur(4px)',
+        'z-index:12000'
+    ].join(';');
+
+    overlay.innerHTML = `
+        <div id="center-confirm-panel" style="width:min(92vw,460px);background:rgba(15,23,42,0.96);border:1px solid rgba(168,85,247,0.35);border-radius:14px;padding:18px 18px 14px;box-shadow:0 16px 40px rgba(0,0,0,.45);">
+            <div id="center-confirm-title" style="font-size:1rem;font-weight:800;color:#e9d5ff;margin-bottom:10px;">操作确认</div>
+            <div id="center-confirm-message" style="font-size:.92rem;line-height:1.65;color:#e5e7eb;margin-bottom:16px;word-break:break-word;"></div>
+            <div style="display:flex;justify-content:flex-end;gap:10px;">
+                <button id="center-confirm-cancel" type="button" style="border:1px solid rgba(148,163,184,.35);background:rgba(71,85,105,.55);color:#e2e8f0;border-radius:10px;padding:8px 16px;font-size:.88rem;font-weight:700;cursor:pointer;">取消</button>
+                <button id="center-confirm-ok" type="button" style="border:1px solid rgba(168,85,247,.45);background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;border-radius:10px;padding:8px 16px;font-size:.88rem;font-weight:700;cursor:pointer;">确定</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+    centerConfirmModal = overlay;
+    return overlay;
+}
+
+function showCenterConfirm(message, title = '操作确认') {
+    return new Promise((resolve) => {
+        const modal = ensureCenterConfirmModal();
+        const titleEl = document.getElementById('center-confirm-title');
+        const msgEl = document.getElementById('center-confirm-message');
+        const okBtn = document.getElementById('center-confirm-ok');
+        const cancelBtn = document.getElementById('center-confirm-cancel');
+
+        titleEl.textContent = title;
+        msgEl.textContent = message;
+        modal.style.display = 'flex';
+
+        const close = (result) => {
+            modal.style.display = 'none';
+            modal.removeEventListener('click', onOverlayClick);
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+            document.removeEventListener('keydown', onKeyDown);
+            resolve(result);
+        };
+
+        const onOverlayClick = (e) => {
+            if (e.target === modal) close(false);
+        };
+        const onOk = () => close(true);
+        const onCancel = () => close(false);
+        const onKeyDown = (e) => {
+            if (e.key === 'Escape') close(false);
+            if (e.key === 'Enter') close(true);
+        };
+
+        modal.addEventListener('click', onOverlayClick);
+        okBtn.addEventListener('click', onOk);
+        cancelBtn.addEventListener('click', onCancel);
+        document.addEventListener('keydown', onKeyDown);
+        okBtn.focus();
+    });
+}
 
 // ==================== 用户权限 ====================
 const currentUser = window.__USER__ || {};
@@ -33,7 +119,7 @@ async function apiFetch(url, options = {}) {
     if (res.status === 403) {
         const data = await res.json().catch(() => ({}));
         if (data.vip_required) {
-            alert('✨ ' + (data.error || '该功能仅 VIP 会员可用，请升级后体验'));
+            showCenterToast('✨ ' + (data.error || '该功能仅 VIP 会员可用，请升级后体验'), 'warn', true);
         }
         throw new Error(data.error || '权限不足');
     }
@@ -51,7 +137,142 @@ document.addEventListener('DOMContentLoaded', () => {
     initTabs();
     initSimulator();
     loadStatistics();
+
+    // VIP 权限控制：隐藏普通用户的 VIP 专属功能
+    const user = window.__USER__ || {};
+    const isVIP = !!(user.role === 'vip' || user.role === 'admin');
+    if (!isVIP) {
+        // 隐藏所有 vip-only 元素
+        const vipOnlyEls = document.querySelectorAll('.vip-only');
+        vipOnlyEls.forEach(el => el.style.display = 'none');
+
+        // 显示提示信息
+        const tip = document.getElementById('settings-permission-tip');
+        if (tip) {
+            tip.innerHTML = '💡 普通用户可选择平台和模型；AI 模拟每次扣 5 积分。<a href="/points" style="color:#a855f7;">升级VIP</a>后可设置自定义API并添加平台/模型。';
+        }
+    }
+
+    renderRoleRules();
+    renderSimulationBillingTip();
+    initSpecialReferenceBoard();
 });
+
+function renderRoleRules() {
+    const box = document.getElementById('settings-role-rules');
+    if (!box) return;
+
+    const role = (window.__USER__ && window.__USER__.role) || 'trial';
+    const roleLabel = role === 'admin' ? '管理员' : (role === 'vip' ? 'VIP 会员' : '普通用户');
+
+    let aiRule = 'AI 模拟每次扣 5 积分（用平台模型扣）';
+    let periodRule = '修改图表期数：每项 1 积分（冷热号、尾数免费）';
+    let modelRule = '可选平台与模型，不可自定义 API/平台/模型';
+
+    if (role === 'vip') {
+        aiRule = 'AI 模拟每次扣 5 积分（用平台模型扣）；自己模型免费';
+        periodRule = '修改图表期数免费，任意分析图表';
+        modelRule = '可配置自定义 API、平台与模型（自己模型免费）';
+    } else if (role === 'admin') {
+        aiRule = 'AI 模拟免费';
+        periodRule = '修改图表期数免费，任意分析图表';
+        modelRule = '可配置自定义 API、平台与模型';
+    }
+
+    box.innerHTML = `
+        <div style="border:1px solid rgba(148,163,184,.25);border-radius:10px;padding:10px 12px;background:rgba(15,23,42,.45);">
+            <div style="font-size:.82rem;font-weight:700;color:#e2e8f0;margin-bottom:6px;">当前权限：${roleLabel}</div>
+            <div style="font-size:.78rem;line-height:1.65;color:#94a3b8;">• ${aiRule}</div>
+            <div style="font-size:.78rem;line-height:1.65;color:#94a3b8;">• ${periodRule}</div>
+            <div style="font-size:.78rem;line-height:1.65;color:#94a3b8;">• ${modelRule}</div>
+        </div>
+    `;
+}
+
+function renderSimulationBillingTip() {
+    const el = document.getElementById('sim-billing-tip');
+    if (!el) return;
+
+    const role = (window.__USER__ && window.__USER__.role) || 'trial';
+    let title = '当前计费';
+    let text = '平台 AI 模拟每次扣 5 积分。';
+    let color = '#cbd5e1';
+    let border = 'rgba(148,163,184,.18)';
+
+    if (role === 'vip') {
+        text = '平台模型每次扣 5 积分；使用你自己的 API / 自定义模型免费。';
+        color = '#fde68a';
+        border = 'rgba(245,158,11,.26)';
+    } else if (role === 'admin') {
+        text = '管理员 AI 模拟免费，不扣积分。';
+        color = '#86efac';
+        border = 'rgba(34,197,94,.28)';
+    }
+
+    el.style.borderColor = border;
+    el.innerHTML = `<strong style="color:${color};">${title}：</strong>${text}`;
+}
+
+function initSpecialReferenceBoard() {
+    const board = document.getElementById('special-reference-board');
+    const status = document.getElementById('ref-board-status');
+    if (!board || !status) return;
+
+    const allChips = Array.from(board.querySelectorAll('.ref-chip'));
+    let activeNumber = '';
+
+    const zodiacMap = {
+        '01': '马（本命）', '13': '马（本命）', '25': '马（本命）', '37': '马（本命）', '49': '马（本命）',
+        '02': '蛇', '14': '蛇', '26': '蛇', '38': '蛇',
+        '03': '龙', '15': '龙', '27': '龙', '39': '龙',
+        '04': '兔', '16': '兔', '28': '兔', '40': '兔',
+        '05': '虎', '17': '虎', '29': '虎', '41': '虎',
+        '06': '牛', '18': '牛', '30': '牛', '42': '牛',
+        '07': '鼠', '19': '鼠', '31': '鼠', '43': '鼠',
+        '08': '猪', '20': '猪', '32': '猪', '44': '猪',
+        '09': '狗', '21': '狗', '33': '狗', '45': '狗',
+        '10': '鸡', '22': '鸡', '34': '鸡', '46': '鸡',
+        '11': '猴', '23': '猴', '35': '猴', '47': '猴',
+        '12': '羊', '24': '羊', '36': '羊', '48': '羊'
+    };
+    const colorMap = {
+        '01': '红波', '02': '红波', '07': '红波', '08': '红波', '12': '红波', '13': '红波', '18': '红波', '19': '红波', '23': '红波', '24': '红波', '29': '红波', '30': '红波', '34': '红波', '35': '红波', '40': '红波', '45': '红波', '46': '红波',
+        '03': '蓝波', '04': '蓝波', '09': '蓝波', '10': '蓝波', '14': '蓝波', '15': '蓝波', '20': '蓝波', '25': '蓝波', '26': '蓝波', '31': '蓝波', '36': '蓝波', '37': '蓝波', '41': '蓝波', '42': '蓝波', '47': '蓝波', '48': '蓝波',
+        '05': '绿波', '06': '绿波', '11': '绿波', '16': '绿波', '17': '绿波', '21': '绿波', '22': '绿波', '27': '绿波', '28': '绿波', '32': '绿波', '33': '绿波', '38': '绿波', '39': '绿波', '43': '绿波', '44': '绿波', '49': '绿波'
+    };
+    const wuxingMap = {
+        '06': '金', '07': '金', '20': '金', '21': '金', '28': '金', '29': '金', '36': '金', '37': '金', '44': '金', '45': '金',
+        '01': '木', '08': '木', '09': '木', '16': '木', '17': '木', '30': '木', '31': '木', '38': '木', '39': '木', '46': '木', '47': '木',
+        '04': '水', '05': '水', '12': '水', '13': '水', '26': '水', '27': '水', '34': '水', '35': '水', '48': '水', '49': '水',
+        '02': '火', '03': '火', '10': '火', '11': '火', '18': '火', '19': '火', '32': '火', '33': '火', '40': '火', '41': '火',
+        '14': '土', '15': '土', '22': '土', '23': '土', '24': '土', '25': '土', '42': '土', '43': '土'
+    };
+
+    const setStatus = (num) => {
+        if (!num) {
+            status.textContent = '点击任意数字高亮它在生肖、波色、五行中的对应关系';
+            return;
+        }
+        status.textContent = `号码 ${num} -> 生肖：${zodiacMap[num] || '未知'} ｜ 波色：${colorMap[num] || '未知'} ｜ 五行：${wuxingMap[num] || '未知'}`;
+    };
+
+    allChips.forEach((chip) => {
+        chip.addEventListener('click', () => {
+            const num = chip.dataset.number || '';
+            if (activeNumber === num) {
+                activeNumber = '';
+                allChips.forEach((item) => item.classList.remove('active'));
+                setStatus('');
+                return;
+            }
+            activeNumber = num;
+            allChips.forEach((item) => {
+                item.classList.toggle('active', item.dataset.number === num);
+            });
+            setStatus(num);
+        });
+    });
+}
 
 // ==================== 彩种切换 ====================
 function initLotteryTypeSelector() {
@@ -73,7 +294,13 @@ function initLotteryTypeSelector() {
             if (state.currentTab === 'statistics') {
                 loadStatistics();
             } else if (state.currentTab === 'history') {
-                loadHistory(1);
+                if (historySubTab === 'draw') {
+                    state.historyPage = 1;
+                    loadHistory(1);
+                } else {
+                    state.aiHistoryPage = 1;
+                    loadAIHistory(1);
+                }
             }
         });
     });
@@ -91,6 +318,12 @@ function initTabs() {
 }
 
 function switchTab(tabName) {
+    // 先保存当前 Tab 的滚动位置
+    if (state.currentTab) {
+        if (!state.tabScrollPositions) state.tabScrollPositions = {};
+        state.tabScrollPositions[state.currentTab] = window.scrollY || window.pageYOffset || 0;
+    }
+
     // 更新按钮状态
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
     document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
@@ -99,15 +332,22 @@ function switchTab(tabName) {
     document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
     document.getElementById(`section-${tabName}`).classList.add('active');
 
+    // 恢复目标 Tab 之前记忆的滚动位置（首次访问默认 0）
+    const savedPos = (state.tabScrollPositions && state.tabScrollPositions[tabName]) || 0;
+    window.scrollTo({ top: savedPos, behavior: 'instant' });
+
     state.currentTab = tabName;
 
     // 按需加载数据
     if (tabName === 'statistics' && !state.statisticsLoaded) {
         loadStatistics();
     } else if (tabName === 'history') {
-        loadHistory(1);
-    } else if (tabName === 'ai-history') {
-        loadAIHistory(1);
+        // 根据子标签加载对应内容
+        if (historySubTab === 'draw') {
+            loadHistory(state.historyPage || 1);
+        } else {
+            loadAIHistory(state.aiHistoryPage || 1);
+        }
     }
 }
 
@@ -143,7 +383,7 @@ function renderStatistics(data) {
         const darkColor = color === '#ef4444' ? '#d30000' : (color === '#3b82f6' ? '#0055d3' : (color === '#22c55e' ? '#00d34b' : '#d4a017'));
         document.getElementById('hottest-number').innerHTML = `
             <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
-                <span style="display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; background: radial-gradient(circle at 30% 30%, ${color}, ${darkColor}); border-radius: 50%; color: #ffffff !important; -webkit-text-fill-color: #ffffff; font-size: 1.2rem; font-weight: 900; font-family: Arial, Helvetica, sans-serif; box-shadow: 0 3px 8px rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.4); line-height: 1; text-shadow: 1px 1px 0 rgba(0,0,0,0.5);">${num}</span>
+                <span class="overview-ball" style="display: inline-flex; align-items: center; justify-content: center; background: radial-gradient(circle at 30% 30%, ${color}, ${darkColor}); border-radius: 50%; color: #ffffff !important; -webkit-text-fill-color: #ffffff; font-weight: 900; font-family: Arial, Helvetica, sans-serif; box-shadow: 0 3px 8px rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.4); line-height: 1; text-shadow: 1px 1px 0 rgba(0,0,0,0.5);">${num}</span>
                 <span style="font-size: 1rem; color: #f3f4f6; font-weight: 600;">(${count}次)</span>
             </div>
         `;
@@ -155,7 +395,7 @@ function renderStatistics(data) {
         const darkColor = color === '#ef4444' ? '#d30000' : (color === '#3b82f6' ? '#0055d3' : (color === '#22c55e' ? '#00d34b' : '#d4a017'));
         document.getElementById('coldest-number').innerHTML = `
             <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
-                <span style="display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; background: radial-gradient(circle at 30% 30%, ${color}, ${darkColor}); border-radius: 50%; color: #ffffff !important; -webkit-text-fill-color: #ffffff; font-size: 1.2rem; font-weight: 900; font-family: Arial, Helvetica, sans-serif; box-shadow: 0 3px 8px rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.4); line-height: 1; text-shadow: 1px 1px 0 rgba(0,0,0,0.5);">${num}</span>
+                <span class="overview-ball" style="display: inline-flex; align-items: center; justify-content: center; background: radial-gradient(circle at 30% 30%, ${color}, ${darkColor}); border-radius: 50%; color: #ffffff !important; -webkit-text-fill-color: #ffffff; font-weight: 900; font-family: Arial, Helvetica, sans-serif; box-shadow: 0 3px 8px rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.4); line-height: 1; text-shadow: 1px 1px 0 rgba(0,0,0,0.5);">${num}</span>
                 <span style="font-size: 1rem; color: #f3f4f6; font-weight: 600;">(${count}次)</span>
             </div>
         `;
@@ -177,26 +417,42 @@ function renderStatistics(data) {
             const darkColor = color === '#ef4444' ? '#d30000' : (color === '#3b82f6' ? '#0055d3' : (color === '#22c55e' ? '#00d34b' : '#d4a017'));
             infoEl.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 12px; margin-top: 4px;">
-                    <span style="display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; background: radial-gradient(circle at 30% 30%, ${color}, ${darkColor}); border-radius: 50%; color: #ffffff !important; -webkit-text-fill-color: #ffffff; font-size: 1.6rem; font-weight: 900; font-family: Arial, Helvetica, sans-serif; box-shadow: 0 4px 12px rgba(0,0,0,0.5); border: 2px solid rgba(255,255,255,0.4); line-height: 1; text-shadow: 1px 1px 0 rgba(0,0,0,0.5);">${num}</span>
+                    <span class="overview-ball" style="display: inline-flex; align-items: center; justify-content: center; background: radial-gradient(circle at 30% 30%, ${color}, ${darkColor}); border-radius: 50%; color: #ffffff !important; -webkit-text-fill-color: #ffffff; font-weight: 900; font-family: Arial, Helvetica, sans-serif; box-shadow: 0 3px 8px rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.4); line-height: 1; text-shadow: 1px 1px 0 rgba(0,0,0,0.5);">${num}</span>
                     <span style="font-size: 1.2rem; color: #f3f4f6; font-weight: 800; letter-spacing: 1px;">${zodiac}</span>
                 </div>
             `;
         }
     }
 
-    // 渲染图表
-    renderFrequencyChart(data.number_frequency);
-    renderHotColdRanking(data.hot_cold);
+    // 渲染图表 —— 分批渲染，避免长时间阻塞主线程
     window.__colorHotCold = data.color_hot_cold;
-    renderColorHotCold(data.color_hot_cold);
-    renderOddEvenChart(data.odd_even);
-    renderBigSmallChart(data.big_small);
-    renderZodiacChart(data.zodiac_stats);
-    renderTailChart(data.tail_numbers);
     window.__markovData = data.markov;
-    renderMarkovChart(data.markov);
-    renderBayesianChart(data.bayesian);
-    renderLSTMChart(data.lstm);
+
+    const chartTasks = [
+        () => renderFrequencyChart(data.number_frequency),
+        () => renderHotColdRanking(data.hot_cold),
+        () => renderColorHotCold(data.color_hot_cold),
+        () => renderOddEvenChart(data.odd_even),
+        () => renderBigSmallChart(data.big_small),
+        () => renderZodiacChart(data.zodiac_stats),
+        () => renderTailChart(data.tail_numbers),
+        () => renderMarkovChart(data.markov),
+        () => renderFiveElementsChart(data.five_elements),
+        () => renderBayesianChart(data.bayesian),
+        () => renderLSTMChart(data.lstm),
+    ];
+
+    // 使用 requestAnimationFrame + setTimeout 分批渲染
+    let taskIdx = 0;
+    function runNextChart() {
+        if (taskIdx >= chartTasks.length) return;
+        chartTasks[taskIdx]();
+        taskIdx++;
+        if (taskIdx < chartTasks.length) {
+            requestAnimationFrame(() => setTimeout(runNextChart, 0));
+        }
+    }
+    runNextChart();
 
     // ===== 为所有图表标题追加统计期数标注 =====
     const periods = data.chart_periods || {};
@@ -208,6 +464,7 @@ function renderStatistics(data) {
         'chart-odd-even': 'odd_even',
         'chart-big-small': 'big_small',
         'chart-zodiac': 'zodiac_trend',
+        'chart-five-elements': 'hot_cold',
         'chart-tail': 'tail',
         'chart-bayesian': 'bayesian',
         'chart-lstm': 'lstm',
@@ -304,12 +561,21 @@ function renderHotColdRanking(hotCold) {
         ...hotCold.cold.map(c => c.count)
     );
 
+    const overallMaxOmission = Math.max(
+        ...hotCold.hot.map(h => h.omission),
+        ...hotCold.cold.map(c => c.omission)
+    );
+
     hotContainer.innerHTML = hotCold.hot.map((item, i) => {
         const colorHex = getBallColorHex(item.number);
         // 如果遗漏超过25期，高亮警告
         const omissionStyle = item.omission >= 25 ? 'color:#f87171;font-weight:bold;' : 'color:#9ca3af;';
         const omissionText = item.omission > 0 ? `遗漏${item.omission}期` : '上期开出';
-        
+        const isMaxOmission = item.omission === overallMaxOmission && overallMaxOmission > 0;
+
+        // 即使出现次数为0，也要给最大遗漏的一个可见宽度以展示动画
+        const displayWidth = isMaxOmission ? Math.max(15, (item.count / maxCount * 100)) : (item.count / maxCount * 100);
+
         return `
         <div class="rank-item hot">
             <span class="rank-pos">${i + 1}</span>
@@ -319,7 +585,7 @@ function renderHotColdRanking(hotCold) {
             </span>
             <div class="rank-bar-wrapper" style="flex:1; display:flex; flex-direction:column; justify-content:center; margin-left:8px; margin-right:8px;">
                 <div class="rank-bar">
-                    <div class="rank-bar-fill" style="width: ${(item.count / maxCount * 100).toFixed(1)}%"></div>
+                    <div class="rank-bar-fill ${isMaxOmission ? 'pulse-glow' : ''}" style="width: ${displayWidth.toFixed(1)}%; ${isMaxOmission ? 'box-shadow: 0 0 15px rgba(245, 200, 66, 0.8) inset, 0 0 20px rgba(245, 200, 66, 0.6); background: #f5c842 !important;' : ''}"></div>
                 </div>
             </div>
             <div style="display:flex; flex-direction:column; align-items:flex-end; min-width:50px;">
@@ -333,7 +599,9 @@ function renderHotColdRanking(hotCold) {
         const colorHex = getBallColorHex(item.number);
         // 如果遗漏超过50期，极度高亮
         const omissionStyle = item.omission >= 50 ? 'color:#ef4444;font-weight:900;' : (item.omission >= 25 ? 'color:#f87171;' : 'color:#9ca3af;');
-        
+        const isMaxOmission = item.omission === overallMaxOmission && overallMaxOmission > 0;
+        const displayWidth = isMaxOmission ? Math.max(15, (item.count / maxCount * 100)) : (item.count / maxCount * 100);
+
         return `
         <div class="rank-item cold">
             <span class="rank-pos">${i + 1}</span>
@@ -343,7 +611,7 @@ function renderHotColdRanking(hotCold) {
             </span>
             <div class="rank-bar-wrapper" style="flex:1; display:flex; flex-direction:column; justify-content:center; margin-left:8px; margin-right:8px;">
                 <div class="rank-bar">
-                    <div class="rank-bar-fill" style="width: ${(item.count / maxCount * 100).toFixed(1)}%"></div>
+                    <div class="rank-bar-fill ${isMaxOmission ? 'pulse-glow' : ''}" style="width: ${displayWidth.toFixed(1)}%; ${isMaxOmission ? 'box-shadow: 0 0 15px rgba(245, 200, 66, 0.8) inset, 0 0 20px rgba(245, 200, 66, 0.6); background: #f5c842 !important;' : ''}"></div>
                 </div>
             </div>
             <div style="display:flex; flex-direction:column; align-items:flex-end; min-width:50px;">
@@ -796,6 +1064,7 @@ function renderMarkovChart(markovData) {
             const actualIdx = startIndex + index;
             const color = backgroundColors[actualIdx];
             const count = occurrences[key] || 0;
+            const isMaxWeight = (weights[key] || 1.0) === maxVal;
 
             const item = document.createElement('div');
             item.style.display = 'flex';
@@ -803,6 +1072,15 @@ function renderMarkovChart(markovData) {
             item.style.fontSize = '0.9rem';
             item.style.color = '#e5e7eb';
             item.style.whiteSpace = 'nowrap';
+
+            if (isMaxWeight) {
+                item.className = 'pulse-glow';
+                item.style.padding = '4px 8px';
+                item.style.margin = '-4px -8px';
+                item.style.borderRadius = '6px';
+                item.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
+                item.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+            }
 
             const box = document.createElement('span');
             box.style.display = 'inline-block';
@@ -935,7 +1213,57 @@ function renderMarkovChart(markovData) {
                     }
                 }
             }
-        }
+        },
+        plugins: [{
+            id: 'markovSliceGlow',
+            afterDraw: (chart) => {
+                const maxVal = Math.max(...values);
+                if (maxVal === 0) return;
+
+                const meta = chart.getDatasetMeta(0);
+                const parent = chart.canvas.parentNode;
+
+                let overlayCanvas = parent.querySelector('.markov-glow-overlay');
+                if (!overlayCanvas) {
+                    overlayCanvas = document.createElement('canvas');
+                    overlayCanvas.className = 'markov-glow-overlay shape-pulse';
+                    overlayCanvas.style.position = 'absolute';
+                    overlayCanvas.style.pointerEvents = 'none';
+                    overlayCanvas.style.zIndex = '10';
+                    parent.appendChild(overlayCanvas);
+                }
+
+                overlayCanvas.style.top = chart.canvas.offsetTop + 'px';
+                overlayCanvas.style.left = chart.canvas.offsetLeft + 'px';
+                overlayCanvas.style.width = chart.canvas.offsetWidth + 'px';
+                overlayCanvas.style.height = chart.canvas.offsetHeight + 'px';
+                overlayCanvas.width = chart.canvas.width;
+                overlayCanvas.height = chart.canvas.height;
+
+                const ctx = overlayCanvas.getContext('2d');
+                ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+                meta.data.forEach((arc, idx) => {
+                    if (values[idx] === maxVal) {
+                        ctx.save();
+                        overlayCanvas.style.color = arc.options.backgroundColor;
+
+                        ctx.beginPath();
+                        if (arc.innerRadius > 0) {
+                            ctx.arc(arc.x, arc.y, arc.outerRadius, arc.startAngle, arc.endAngle);
+                            ctx.arc(arc.x, arc.y, arc.innerRadius, arc.endAngle, arc.startAngle, true);
+                        } else {
+                            ctx.moveTo(arc.x, arc.y);
+                            ctx.arc(arc.x, arc.y, arc.outerRadius, arc.startAngle, arc.endAngle);
+                        }
+                        ctx.closePath();
+                        ctx.fillStyle = arc.options.backgroundColor;
+                        ctx.fill();
+                        ctx.restore();
+                    }
+                });
+            }
+        }]
     });
 }
 
@@ -956,6 +1284,12 @@ function renderTailChart(tailData) {
     const omissionValues = Object.keys(dist).map(k => omission[k] || 0);
 
     if (state.charts.tail) state.charts.tail.destroy();
+
+    const container = ctx.canvas.parentNode;
+    if (container._pulses) {
+        container._pulses.forEach(el => el.remove());
+    }
+    container._pulses = [];
 
     state.charts.tail = new Chart(ctx, {
         type: 'bar',
@@ -1040,7 +1374,58 @@ function renderTailChart(tailData) {
                     title: { display: true, text: '当前遗漏期数', color: '#f87171' }
                 }
             }
-        }
+        },
+        plugins: [{
+            id: 'tailPulseOverlay',
+            afterDraw: (chart) => {
+                const maxVal = Math.max(...omissionValues);
+                if (maxVal === 0) return;
+
+                const metaBars = chart.getDatasetMeta(0); // get bars
+                if (!metaBars || !metaBars.data) return;
+
+                const parent = chart.canvas.parentNode;
+                if (!parent._pulses) parent._pulses = [];
+
+                let pulseIdx = 0;
+                omissionValues.forEach((val, idx) => {
+                    if (val === maxVal && metaBars.data[idx]) {
+                        const bar = metaBars.data[idx];
+                        let overlay = parent._pulses[pulseIdx];
+                        if (!overlay) {
+                            overlay = document.createElement('div');
+                            overlay.className = 'bar-pulse';
+                            overlay.style.position = 'absolute';
+                            overlay.style.pointerEvents = 'none';
+                            overlay.style.zIndex = '10';
+                            parent.appendChild(overlay);
+                            parent._pulses.push(overlay);
+                        }
+
+                        const width = bar.width;
+                        const height = Math.abs(bar.base - bar.y);
+                        const left = chart.canvas.offsetLeft + bar.x - width / 2;
+                        const top = chart.canvas.offsetTop + Math.min(bar.y, bar.base);
+
+                        if (bar.x >= 0 && bar.x <= chart.width) {
+                            overlay.style.left = left + 'px';
+                            overlay.style.top = top + 'px';
+                            overlay.style.width = width + 'px';
+                            overlay.style.height = height + 'px';
+                            overlay.style.borderRadius = '4px';
+                            overlay.style.display = 'block';
+                        } else {
+                            overlay.style.display = 'none';
+                        }
+                        pulseIdx++;
+                    }
+                });
+
+                for (let i = pulseIdx; i < parent._pulses.length; i++) {
+                    parent._pulses[i].style.display = 'none';
+                }
+            }
+        }]
     });
 }
 
@@ -1184,6 +1569,167 @@ function renderBayesianChart(bayesianData) {
             }
         }
     });
+}
+
+function renderFiveElementsChart(fiveData) {
+    const canvas = document.getElementById('chart-five-elements');
+    if (!canvas || !fiveData || !fiveData.chi_square) return;
+    const ctx = canvas.getContext('2d');
+
+    const items = fiveData.chi_square.items || [];
+    const labels = items.map(i => i.element);
+    const observed = items.map(i => i.observed);
+    const expected = items.map(i => i.expected);
+
+    if (state.charts.fiveElements) state.charts.fiveElements.destroy();
+
+    state.charts.fiveElements = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: '实际频数',
+                    data: observed,
+                    backgroundColor: ['rgba(245,158,11,.75)', 'rgba(16,185,129,.75)', 'rgba(6,182,212,.75)', 'rgba(249,115,22,.75)', 'rgba(161,98,7,.75)'],
+                    borderRadius: 6
+                },
+                {
+                    label: '理论期望',
+                    data: expected,
+                    type: 'line',
+                    borderColor: 'rgba(226,232,240,.9)',
+                    backgroundColor: 'rgba(226,232,240,.18)',
+                    borderWidth: 2,
+                    tension: 0.25,
+                    pointRadius: 4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { labels: { color: '#e5e7eb' } },
+                tooltip: {
+                    callbacks: {
+                        footer: () => `卡方值 ${fiveData.chi_square.stat} | p=${fiveData.chi_square.p_value}`
+                    }
+                }
+            },
+            scales: {
+                x: { ticks: { color: '#cbd5e1' }, grid: { color: 'rgba(255,255,255,.05)' } },
+                y: { ticks: { color: '#cbd5e1' }, grid: { color: 'rgba(255,255,255,.05)' } }
+            }
+        }
+    });
+
+    const summaryEl = document.getElementById('five-elements-summary');
+    if (summaryEl) {
+        const chi = fiveData.chi_square || {};
+        const apriori = fiveData.apriori || {};
+        const poisson = fiveData.poisson || {};
+        summaryEl.innerHTML = `
+            <div class="glass" style="padding:12px; border-radius:12px;">
+                <div style="font-size:.75rem; color:#94a3b8;">卡方检验</div>
+                <div style="font-size:1rem; font-weight:800; color:#f8fafc; margin-top:4px;">${chi.headline || '样本不足'}</div>
+                <div style="font-size:.78rem; color:${chi.significant ? '#fca5a5' : '#86efac'}; margin-top:6px;">χ²=${chi.stat || 0} ｜ p=${chi.p_value || 0}</div>
+            </div>
+            <div class="glass" style="padding:12px; border-radius:12px;">
+                <div style="font-size:.75rem; color:#94a3b8;">Apriori 关联</div>
+                <div style="font-size:1rem; font-weight:800; color:#f8fafc; margin-top:4px;">${apriori.headline || '样本不足'}</div>
+                <div style="font-size:.78rem; color:#cbd5e1; margin-top:6px;">验证五行相生相克是否真实存在</div>
+            </div>
+            <div class="glass" style="padding:12px; border-radius:12px;">
+                <div style="font-size:.75rem; color:#94a3b8;">泊松遗漏</div>
+                <div style="font-size:1rem; font-weight:800; color:#f8fafc; margin-top:4px;">${poisson.headline || '样本不足'}</div>
+                <div style="font-size:.78rem; color:#cbd5e1; margin-top:6px;">关注极端遗漏后的均值回归拐点</div>
+            </div>
+        `;
+    }
+
+    const rulesEl = document.getElementById('five-elements-rules');
+    if (rulesEl) {
+        const rules = (fiveData.apriori && fiveData.apriori.rules) || [];
+        const poissonItems = (fiveData.poisson && fiveData.poisson.items) || [];
+        const topRules = rules.slice(0, 3).map(r =>
+            `<div style="padding:10px 12px; border-radius:10px; background:rgba(15,23,42,.45); border:1px solid rgba(148,163,184,.16); margin-bottom:8px; color:#cbd5e1;">
+                <strong style="color:#f8fafc;">${r.from} → ${r.to}</strong> ｜ 支持度 ${r.support}% ｜ 置信度 ${r.confidence}% ｜ Lift ${r.lift}
+            </div>`
+        ).join('');
+        const topPoisson = poissonItems.slice(0, 2).map(r =>
+            `<div style="padding:10px 12px; border-radius:10px; background:rgba(15,23,42,.45); border:1px solid rgba(148,163,184,.16); margin-bottom:8px; color:#cbd5e1;">
+                <strong style="color:#f8fafc;">${r.element}</strong> ｜ 当前遗漏 ${r.current_gap} 期 ｜ 10期内零出现概率 ${r.p0_next_10}% ｜ ${r.hint}
+            </div>`
+        ).join('');
+        rulesEl.innerHTML = `
+            <div style="font-size:.8rem; color:#94a3b8; margin-bottom:8px;">五行关联 / 泊松窗口</div>
+            ${topRules}${topPoisson}
+        `;
+    }
+
+    const heatmapEl = document.getElementById('five-elements-heatmap');
+    if (heatmapEl) {
+        const matrix = (fiveData.apriori && fiveData.apriori.matrix) || [];
+        const colHead = matrix[0]?.items?.map(item => `<th style="padding:8px; color:#cbd5e1; font-weight:700;">${item.to}</th>`).join('') || '';
+        const rows = matrix.map(row => {
+            const cells = row.items.map(item => {
+                const alpha = Math.min(0.9, Math.max(0.08, item.confidence / 100));
+                return `<td style="padding:8px; text-align:center; background:rgba(168,85,247,${alpha}); color:#f8fafc; border:1px solid rgba(255,255,255,.06); border-radius:8px;">${item.confidence}%</td>`;
+            }).join('');
+            return `<tr><th style="padding:8px; color:#e2e8f0; font-weight:700; text-align:left;">${row.from}</th>${cells}</tr>`;
+        }).join('');
+        heatmapEl.innerHTML = `
+            <div style="font-size:.8rem; color:#94a3b8; margin-bottom:8px;">五行转移热力图（上期 → 下期）</div>
+            <div style="overflow:auto; border-radius:12px; border:1px solid rgba(148,163,184,.14); background:rgba(15,23,42,.34); padding:10px;">
+                <table style="width:100%; min-width:min(100%, 420px); border-collapse:separate; border-spacing:6px;">
+                    <thead><tr><th></th>${colHead}</tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    const omissionEl = document.getElementById('five-elements-omission');
+    if (omissionEl) {
+        const items = (fiveData.poisson && fiveData.poisson.items) || [];
+        omissionEl.innerHTML = `
+            <div style="font-size:.8rem; color:#94a3b8; margin-bottom:8px;">五行遗漏排行</div>
+            ${items.map((item, idx) => {
+            const bar = Math.max(8, Math.min(100, 100 - item.gap_tail_prob));
+            return `<div style="padding:10px 12px; border-radius:10px; background:rgba(15,23,42,.45); border:1px solid rgba(148,163,184,.16); margin-bottom:8px;">
+                    <div style="display:flex; justify-content:space-between; gap:10px; align-items:center; margin-bottom:6px;">
+                        <strong style="color:#f8fafc;">#${idx + 1} ${item.element}</strong>
+                        <span style="font-size:.78rem; color:#cbd5e1;">遗漏 ${item.current_gap} 期 ｜ λ10=${item.lambda_10}</span>
+                    </div>
+                    <div style="height:8px; border-radius:999px; background:rgba(255,255,255,.06); overflow:hidden; margin-bottom:6px;">
+                        <div style="width:${bar}%; height:100%; background:linear-gradient(90deg,#f59e0b,#ef4444);"></div>
+                    </div>
+                    <div style="font-size:.78rem; color:#94a3b8;">零出现概率 ${item.p0_next_10}% ｜ 尾部概率 ${item.gap_tail_prob}% ｜ ${item.hint}</div>
+                </div>`;
+        }).join('')}
+        `;
+    }
+
+    const ballsEl = document.getElementById('five-elements-balls');
+    if (ballsEl) {
+        const map = fiveData.number_balls || {};
+        const ballRows = Object.entries(map).map(([element, nums]) => {
+            const balls = nums.map((num) => {
+                const colorHex = getBallColorHex(num);
+                const darkColor = colorHex === '#ef4444' ? '#d30000' : (colorHex === '#3b82f6' ? '#0055d3' : '#00a83b');
+                return `<span style="display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:50%; background:radial-gradient(circle at 30% 30%, ${colorHex}, ${darkColor}); color:#fff; font-weight:900; font-size:.84rem; box-shadow:0 3px 8px rgba(0,0,0,.32); border:2px solid rgba(255,255,255,.3); text-shadow:1px 1px 0 rgba(0,0,0,.45);">${String(num).padStart(2, '0')}</span>`;
+            }).join('');
+            return `<div style="padding:10px 12px; border-radius:10px; background:rgba(15,23,42,.45); border:1px solid rgba(148,163,184,.16); margin-bottom:8px;">
+                <div style="font-size:.84rem; font-weight:700; color:#f8fafc; margin-bottom:8px;">${element}</div>
+                <div style="display:flex; flex-wrap:wrap; gap:8px;">${balls}</div>
+            </div>`;
+        }).join('');
+        ballsEl.innerHTML = `
+            <div style="font-size:.8rem; color:#94a3b8; margin-bottom:8px;">五行数字彩球映射</div>
+            ${ballRows}
+        `;
+    }
 }
 
 // ===== LSTM 深度学习模型 =====
@@ -1408,6 +1954,23 @@ function showBatchResult(data) {
 }
 
 // ==================== 历史记录 ====================
+
+let historySubTab = 'draw'; // 'draw' or 'ai'
+
+function switchHistoryTab(tab) {
+    historySubTab = tab;
+    document.getElementById('btn-history-draw').classList.toggle('active', tab === 'draw');
+    document.getElementById('btn-history-ai').classList.toggle('active', tab === 'ai');
+    document.getElementById('history-draw-section').style.display = tab === 'draw' ? 'block' : 'none';
+    document.getElementById('history-ai-section').style.display = tab === 'ai' ? 'block' : 'none';
+
+    if (tab === 'draw') {
+        loadHistory(state.historyPage || 1);
+    } else {
+        loadAIHistory(state.aiHistoryPage || 1);
+    }
+}
+
 async function loadHistory(page) {
     try {
         const response = await fetch(`/api/history?page=${page}&per_page=20&type=${state.lotteryType}`);
@@ -1606,8 +2169,173 @@ async function syncLatestData() {
     btn.textContent = '🔄 同步最新';
 }
 
+// ==================== 保存 AI 分析结果为图片 ====================
+async function shareAIResult(mode, btnEl) {
+    let targetId = '';
+    let fileNamePrefix = '';
+
+    if (mode === 'zodiac') {
+        targetId = 'sim-zodiac-result';
+        fileNamePrefix = 'AI生肖推算';
+    } else {
+        targetId = 'sim-ai-result';
+        fileNamePrefix = 'AI智能分析';
+    }
+
+    const card = document.getElementById(targetId);
+    if (!card || card.style.display === 'none') {
+        showCenterToast('暂无可保存的分析结果', 'warn');
+        return;
+    }
+
+    // 更新按钮状态
+    let origText = '📸 存图';
+    if (btnEl) {
+        origText = btnEl.textContent;
+        btnEl.textContent = '⏳ 生成...';
+        btnEl.disabled = true;
+    }
+
+    try {
+        // 保存原始样式，临时调整用于截图
+        const origBoxShadow = card.style.boxShadow;
+        const origBorder = card.style.border;
+        card.style.boxShadow = 'none';
+        
+        // 增加内边距防止拥挤
+        const origPadding = card.style.padding;
+        card.style.padding = '24px';
+
+        // 添加水印
+        const watermark = document.createElement('div');
+        watermark.style.cssText = 'text-align:center; padding:16px 0 8px; font-size:0.8rem; color:#6b7280; border-top:1px solid rgba(255,255,255,0.06); margin-top:20px;';
+        watermark.textContent = `🎰 六合彩智能分析系统 · ${fileNamePrefix}档案`;
+        card.appendChild(watermark);
+
+        // 如果未加载 html2canvas 则提示
+        if (typeof html2canvas === 'undefined') {
+            throw new Error("html2canvas 库未加载");
+        }
+
+        const canvas = await html2canvas(card, {
+            backgroundColor: '#0f172a',
+            scale: window.devicePixelRatio || 2,
+            useCORS: true,
+            logging: false,
+            allowTaint: true,
+            removeContainer: true,
+        });
+
+        // 恢复样式并移除水印
+        card.removeChild(watermark);
+        card.style.boxShadow = origBoxShadow;
+        card.style.border = origBorder;
+        card.style.padding = origPadding;
+
+        // 尝试使用 Web Share API 纯分享图片（移动端优先）
+        if (navigator.share && navigator.canShare) {
+            canvas.toBlob(async (blob) => {
+                const now = new Date();
+                const ts = now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0') + '_' + String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0');
+                const file = new File([blob], `${fileNamePrefix}_${ts}.png`, { type: 'image/png' });
+                try {
+                    await navigator.share({
+                        title: fileNamePrefix,
+                        files: [file]
+                    });
+                } catch (shareErr) {
+                    // 如果用户取消或分享失败，回退到下载功能
+                    downloadCanvas(canvas, fileNamePrefix);
+                }
+            }, 'image/png');
+        } else {
+            // 桌面端或不支持分享的设备，直接下载图片
+            downloadCanvas(canvas, fileNamePrefix);
+        }
+        
+    } catch (err) {
+        console.error('生成图片失败:', err);
+        showCenterToast('生成图片失败: ' + err.message, 'error');
+    } finally {
+        if (btnEl) {
+            btnEl.textContent = origText;
+            btnEl.disabled = false;
+        }
+    }
+}
+
+function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+            showCenterToast('📋 分析结果已复制到剪贴板，可直接粘贴分享', 'success');
+        }).catch(() => {
+            fallbackCopy(text);
+        });
+    } else {
+        fallbackCopy(text);
+    }
+}
+
+function fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+        document.execCommand('copy');
+        showCenterToast('📋 分析结果已复制到剪贴板', 'success');
+    } catch {
+        showCenterToast('❌ 复制失败，请手动选择文本', 'error');
+    }
+    document.body.removeChild(ta);
+}
+
+// ==================== AI 分析文本公共格式化函数 ====================
+function formatAnalysisText(rawText) {
+    if (!rawText) return '';
+    let text = rawText;
+
+    // Markdown 加粗
+    text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+    // 段落间距（连续两个换行）
+    text = text.replace(/\n\s*\n/g, '<div style="height: 12px;"></div>');
+    // 兼容 API 返回的字面量 \\n 转义
+    text = text.replace(/\\n/g, '<br/>');
+    // 真实换行符
+    text = text.replace(/\n/g, '<br/>');
+
+    // emoji 关键词增强
+    const emojiMap = {
+        '单双': '☯️ 单双', '大小': '⚖️ 大小', '连出': '🔥 连出',
+        '冷门': '❄️ 冷门', '回补': '♻️ 回补', '反转': '🔄 反转',
+        '极大值': '📈 极大值', '极小值': '📉 极小值', '预测': '🎯 预测',
+        '结论': '💡 结论', '概率': '🎲 概率', '权重': '⚖️ 权重', '遗漏': '⌛ 遗漏'
+    };
+    for (const [key, emoji] of Object.entries(emojiMap)) {
+        text = text.replace(new RegExp(key, 'g'), `<span style="color:#e2e8f0;">${emoji}</span>`);
+    }
+
+    // 行首数字列表样式
+    text = text.replace(/(^|<br\/>)(\s*)(\d+[\.)])\s*/g,
+        '$1$2<span style="color:#cbd5e1;font-weight:bold;margin-right:6px;">$3</span> ');
+
+    return text;
+}
+
 // AI 智能分析
 async function runAISimulation() {
+    const role = (window.__USER__ && window.__USER__.role) || 'trial';
+    if (role !== 'admin') {
+        const feeText = role === 'vip'
+            ? '本次 AI 模拟：平台模型扣 5 积分；自己模型免费。是否继续？'
+            : '本次 AI 模拟将扣除 5 积分，是否继续？';
+        const proceed = await showCenterConfirm(feeText, 'AI 扣分提醒');
+        if (!proceed) return;
+    }
+
     const btn = document.getElementById('btn-ai-simulate');
     const btnText = btn.querySelector('.btn-text');
     const btnLoad = btn.querySelector('.btn-loading');
@@ -1643,6 +2371,10 @@ async function runAISimulation() {
 
         if (json.success && json.data) {
             const data = json.data;
+            if (data.points_deducted && data.points_deducted > 0) {
+                const balanceText = data.points_balance !== null && data.points_balance !== undefined ? `，剩余 ${data.points_balance} 积分` : '';
+                showCenterToast(`本次平台AI模拟扣除 ${data.points_deducted} 积分${balanceText}`, 'warn');
+            }
 
             // AI 结果
             if (data.ai_result && data.ai_result.success) {
@@ -1654,7 +2386,12 @@ async function runAISimulation() {
                 document.getElementById('ai-result-balls').innerHTML = renderBallsHtml(
                     ai.numbers, ai.zodiacs || [], ai.special_num, ai.special_zodiac || '', 'ai-ball'
                 );
-                document.getElementById('ai-analysis-text').textContent = ai.analysis;
+                
+                let formattedText = formatAnalysisText(ai.analysis || '');
+                
+                document.getElementById('ai-analysis-text').innerHTML = formattedText;
+                document.getElementById('ai-analysis-text').style.lineHeight = '1.8';
+                
             } else if (data.ai_result) {
                 // AI 调用失败，展示失败原因
                 const aiContainer = document.getElementById('sim-ai-result');
@@ -1662,7 +2399,7 @@ async function runAISimulation() {
                 document.getElementById('ai-confidence').textContent = '⚠️ AI 调用失败';
                 document.getElementById('ai-confidence').style.color = '#f87171';
                 document.getElementById('ai-result-balls').innerHTML = '';
-                document.getElementById('ai-analysis-text').textContent = data.ai_result.analysis || 'AI 模型调用异常，请检查系统设置中的模型名称和 API Key 是否正确。';
+                document.getElementById('ai-analysis-text').innerHTML = (data.ai_result.analysis || 'AI 模型调用异常，请检查系统设置中的模型名称和 API Key 是否正确。').replace(/\n/g, '<br/>');
             }
 
             // 传统加权对比结果
@@ -1675,11 +2412,11 @@ async function runAISimulation() {
                 );
             }
         } else {
-            alert('模拟失败: ' + (json.error || '未知错误'));
+            showCenterToast('模拟失败: ' + (json.error || '未知错误'), 'error', true);
         }
     } catch (e) {
         document.getElementById('sim-animation').style.display = 'none';
-        alert('请求失败: ' + e.message);
+        showCenterToast('请求失败: ' + e.message, 'error', true);
     }
 
     btn.disabled = false;
@@ -1729,11 +2466,11 @@ async function runWeightedSimulation() {
                 draw.numbers, draw.zodiacs, draw.special_num, draw.special_zodiac
             );
         } else {
-            alert('模拟失败: ' + (json.error || '未知错误'));
+            showCenterToast('模拟失败: ' + (json.error || '未知错误'), 'error', true);
         }
     } catch (e) {
         document.getElementById('sim-animation').style.display = 'none';
-        alert('请求失败: ' + e.message);
+        showCenterToast('请求失败: ' + e.message, 'error', true);
     }
 
     btn.disabled = false;
@@ -1772,6 +2509,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // AI 生肖推算
 async function runZodiacSimulation() {
+    const role = (window.__USER__ && window.__USER__.role) || 'trial';
+    if (role !== 'admin') {
+        const feeText = role === 'vip'
+            ? '本次 AI 推算：平台模型扣 5 积分；自己模型免费。是否继续？'
+            : '本次 AI 推算将扣除 5 积分，是否继续？';
+        const proceed = await showCenterConfirm(feeText, 'AI 扣分提醒');
+        if (!proceed) return;
+    }
+
     const btn = document.getElementById('btn-zodiac-simulate');
     const btnText = btn.querySelector('.btn-text');
     const btnLoad = btn.querySelector('.btn-loading');
@@ -1809,22 +2555,28 @@ async function runZodiacSimulation() {
             const container = document.getElementById('sim-zodiac-result');
             container.style.display = 'block';
 
+            if (json.data.points_deducted && json.data.points_deducted > 0) {
+                const balanceText = json.data.points_balance !== null && json.data.points_balance !== undefined ? `，剩余 ${json.data.points_balance} 积分` : '';
+                showCenterToast(`本次平台AI推算扣除 ${json.data.points_deducted} 积分${balanceText}`, 'warn');
+            }
+
             if (zr.success) {
                 document.getElementById('zodiac-confidence').textContent = `置信度: ${zr.confidence}`;
                 renderZodiacPredictions(zr.zodiac_predictions);
-                document.getElementById('zodiac-analysis-text').textContent = zr.analysis;
+                document.getElementById('zodiac-analysis-text').innerHTML = formatAnalysisText(zr.analysis || '');
+                document.getElementById('zodiac-analysis-text').style.lineHeight = '1.8';
             } else {
                 document.getElementById('zodiac-confidence').textContent = '⚠️ AI 调用失败';
                 document.getElementById('zodiac-confidence').style.color = '#f87171';
                 document.getElementById('zodiac-predictions').innerHTML = '';
-                document.getElementById('zodiac-analysis-text').textContent = zr.analysis || 'AI 模型调用异常';
+                document.getElementById('zodiac-analysis-text').innerHTML = formatAnalysisText(zr.analysis || 'AI 模型调用异常');
             }
         } else {
-            alert('推算失败: ' + (json.error || '未知错误'));
+            showCenterToast('推算失败: ' + (json.error || '未知错误'), 'error', true);
         }
     } catch (e) {
         document.getElementById('sim-animation').style.display = 'none';
-        alert('请求失败: ' + e.message);
+        showCenterToast('请求失败: ' + e.message, 'error', true);
     }
 
     btn.disabled = false;
@@ -1880,12 +2632,58 @@ function renderZodiacPredictions(predictions) {
 
 // ==================== 设置面板 ====================
 
+const DEFAULT_PLATFORM_MODELS = {
+    local: ['gpt-5.4', 'z-ai/glm4.7', 'gpt-5.2'],
+    nvidia: [
+        'z-ai/glm4.7',
+        'z-ai/glm5',
+        'meta/llama-4-scout-17b-16e-instruct',
+        'minimaxai/minimax-m2.5',
+        'microsoft/phi-4-mini-flash-reasoning',
+        'qwen/qwen3.5-122b-a10b'
+    ],
+    google: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-3.1-pro-preview', 'gemini-3-pro-preview', 'gemini-3-flash-preview'],
+    openai: ['gpt-4o', 'gpt-4o-mini', 'o4-mini'],
+    deepseek: ['deepseek-chat', 'deepseek-reasoner'],
+    qwen: ['qwen-max', 'qwen-plus', 'qwen-turbo'],
+    glm: ['glm-4-plus', 'glm-4-air', 'glm-4-flash'],
+    minimax: ['minimax-text-01', 'minimax-chat', 'abab6.5-chat'],
+};
+const DEFAULT_PLATFORM_LABELS = {
+    local: '本地模型(OpenAI兼容)',
+    nvidia: 'NVIDIA NIM',
+    google: 'Google Gemini',
+    openai: 'OpenAI',
+    deepseek: 'DeepSeek',
+    qwen: '通义千问',
+    glm: '智谱AI (GLM)',
+    minimax: 'MiniMax',
+};
+const DEFAULT_PLATFORM_BASE_URLS = {
+    local: 'http://127.0.0.1:8317/v1',
+    nvidia: 'https://integrate.api.nvidia.com/v1',
+    google: 'https://generativelanguage.googleapis.com',
+    openai: 'https://api.openai.com/v1',
+    deepseek: 'https://api.deepseek.com/v1',
+    qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    glm: 'https://open.bigmodel.cn/api/paas/v4',
+    minimax: 'https://api.minimax.chat/v1',
+};
+let settingsCustomPlatforms = [];
+let settingsCustomPlatformModels = {};
+
 function initSettingsPanel() {
     const modal = document.getElementById('settings-modal');
     const btnOpen = document.getElementById('btn-open-settings');
     const btnClose = document.getElementById('btn-close-settings');
     const overlay = document.getElementById('settings-overlay');
     const btnSave = document.getElementById('btn-save-settings');
+    const platformEl = document.getElementById('set-ai-platform');
+    const btnAddPlatform = document.getElementById('btn-add-platform');
+    const customPlatformInput = document.getElementById('set-custom-platform');
+    const btnAddModel = document.getElementById('btn-add-model');
+    const customModelInput = document.getElementById('set-custom-model');
+    const btnToggleAiKey = document.getElementById('btn-toggle-ai-key');
 
     if (!modal) return;
 
@@ -1902,6 +2700,295 @@ function initSettingsPanel() {
 
     // 保存设置
     if (btnSave) btnSave.addEventListener('click', saveSettings);
+
+    // 平台切换时联动模型下拉与列表
+    if (platformEl) {
+        platformEl.addEventListener('change', () => {
+            applyPlatformBaseUrl(platformEl.value, true);
+            syncModelOptions();
+            renderCustomModelList();
+        });
+    }
+
+    if (btnAddPlatform) btnAddPlatform.addEventListener('click', addCustomPlatform);
+    if (customPlatformInput) {
+        customPlatformInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addCustomPlatform();
+            }
+        });
+    }
+
+    // 添加自定义模型
+    if (btnAddModel) btnAddModel.addEventListener('click', addCustomModel);
+    if (customModelInput) {
+        customModelInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addCustomModel();
+            }
+        });
+    }
+
+    if (btnToggleAiKey) {
+        btnToggleAiKey.addEventListener('click', toggleAiKeyVisibility);
+    }
+}
+
+function getDefaultBaseUrl(platform) {
+    return DEFAULT_PLATFORM_BASE_URLS[normalizePlatformName(platform)] || '';
+}
+
+function applyPlatformBaseUrl(platform, force = false) {
+    const baseEl = document.getElementById('set-ai-base');
+    if (!baseEl) return;
+    const defaultUrl = getDefaultBaseUrl(platform);
+    if (force || !String(baseEl.value || '').trim()) {
+        baseEl.value = defaultUrl;
+    }
+    baseEl.placeholder = defaultUrl || '可选，如 https://api.openai.com/v1';
+}
+
+function toggleAiKeyVisibility() {
+    const keyEl = document.getElementById('set-ai-key');
+    const btn = document.getElementById('btn-toggle-ai-key');
+    if (!keyEl || !btn) return;
+    if (keyEl.type === 'password') {
+        keyEl.type = 'text';
+        btn.textContent = '🙈';
+    } else {
+        keyEl.type = 'password';
+        btn.textContent = '👁';
+    }
+}
+
+function normalizePlatformName(name) {
+    return String(name || '').trim().toLowerCase();
+}
+
+function normalizeModelName(name) {
+    return String(name || '').trim();
+}
+
+function getAllPlatforms() {
+    const defaults = Object.keys(DEFAULT_PLATFORM_MODELS);
+    return [...defaults, ...settingsCustomPlatforms.filter((p) => !defaults.includes(p))];
+}
+
+function renderPlatformOptions(selectedPlatform = '') {
+    const platformEl = document.getElementById('set-ai-platform');
+    if (!platformEl) return;
+
+    const platforms = getAllPlatforms();
+    platformEl.innerHTML = platforms
+        .map((p) => `<option value="${p}">${DEFAULT_PLATFORM_LABELS[p] || p}</option>`)
+        .join('');
+
+    const target = normalizePlatformName(selectedPlatform) || platforms[0] || 'google';
+    if (!platforms.includes(target)) {
+        platformEl.insertAdjacentHTML('beforeend', `<option value="${target}">${target}</option>`);
+        if (!Object.prototype.hasOwnProperty.call(DEFAULT_PLATFORM_MODELS, target) && !settingsCustomPlatforms.includes(target)) {
+            settingsCustomPlatforms.push(target);
+        }
+    }
+    platformEl.value = target;
+}
+
+function syncModelOptions(selectedModel = '') {
+    const platformEl = document.getElementById('set-ai-platform');
+    const modelEl = document.getElementById('set-ai-model');
+    if (!modelEl || !platformEl) return;
+
+    const platform = normalizePlatformName(platformEl.value) || 'google';
+
+    const defaultModels = DEFAULT_PLATFORM_MODELS[platform] || [];
+    const customModels = settingsCustomPlatformModels[platform] || [];
+    const allModels = [...defaultModels, ...customModels];
+
+    const uniq = [];
+    const seen = new Set();
+    allModels.forEach((m) => {
+        const n = normalizeModelName(m);
+        if (!n || seen.has(n)) return;
+        seen.add(n);
+        uniq.push(n);
+    });
+
+    modelEl.innerHTML = uniq.map((m) => `<option value="${m}">${m}</option>`).join('');
+
+    const target = normalizeModelName(selectedModel);
+    if (target) {
+        if (!seen.has(target)) {
+            modelEl.insertAdjacentHTML('beforeend', `<option value="${target}">${target}</option>`);
+            if (!defaultModels.includes(target)) {
+                if (!settingsCustomPlatformModels[platform]) settingsCustomPlatformModels[platform] = [];
+                if (!settingsCustomPlatformModels[platform].includes(target)) {
+                    settingsCustomPlatformModels[platform].push(target);
+                    renderCustomModelList();
+                }
+            }
+        }
+        modelEl.value = target;
+    } else if (uniq.length > 0) {
+        modelEl.value = uniq[0];
+    }
+}
+
+function renderCustomModelList() {
+    const wrap = document.getElementById('custom-model-list');
+    const platform = normalizePlatformName(document.getElementById('set-ai-platform')?.value || 'google');
+    const models = settingsCustomPlatformModels[platform] || [];
+    if (!wrap) return;
+    if (!models.length) {
+        wrap.innerHTML = '<span style="color:#64748b; font-size:0.78rem;">当前平台暂无自定义模型</span>';
+        return;
+    }
+    wrap.innerHTML = models.map((m) => (
+        `<span class="settings-chip">${m}<button type="button" onclick="removeCustomModel('${platform.replace(/'/g, "\\'")}', '${m.replace(/'/g, "\\'")}')">×</button></span>`
+    )).join('');
+}
+
+function renderCustomPlatformList() {
+    const wrap = document.getElementById('custom-platform-list');
+    if (!wrap) return;
+    if (!settingsCustomPlatforms.length) {
+        wrap.innerHTML = '<span style="color:#64748b; font-size:0.78rem;">暂无自定义平台</span>';
+        return;
+    }
+    wrap.innerHTML = settingsCustomPlatforms.map((p) => (
+        `<span class="settings-chip">${p}<button type="button" onclick="removeCustomPlatform('${p.replace(/'/g, "\\'")}')">×</button></span>`
+    )).join('');
+}
+
+function addCustomPlatform() {
+    const input = document.getElementById('set-custom-platform');
+    const platform = normalizePlatformName(input ? input.value : '');
+    if (!platform) return;
+
+    if (Object.prototype.hasOwnProperty.call(DEFAULT_PLATFORM_MODELS, platform) || settingsCustomPlatforms.includes(platform)) {
+        showSettingsToast('该平台已存在', 'info');
+        if (input) input.value = '';
+        renderPlatformOptions(platform);
+        syncModelOptions();
+        renderCustomPlatformList();
+        return;
+    }
+
+    settingsCustomPlatforms.push(platform);
+    settingsCustomPlatformModels[platform] = settingsCustomPlatformModels[platform] || [];
+    if (input) input.value = '';
+    renderPlatformOptions(platform);
+    applyPlatformBaseUrl(platform, true);
+    renderCustomPlatformList();
+    syncModelOptions();
+    renderCustomModelList();
+    showSettingsToast('平台已添加：' + platform, 'success');
+}
+
+function addCustomModel() {
+    const platform = normalizePlatformName(document.getElementById('set-ai-platform')?.value || 'google');
+    const defaultModels = DEFAULT_PLATFORM_MODELS[platform] || [];
+    const input = document.getElementById('set-custom-model');
+    const model = normalizeModelName(input ? input.value : '');
+    if (!model) return;
+    settingsCustomPlatformModels[platform] = settingsCustomPlatformModels[platform] || [];
+    if (defaultModels.includes(model) || settingsCustomPlatformModels[platform].includes(model)) {
+        showSettingsToast('该模型已存在', 'info');
+        if (input) input.value = '';
+        syncModelOptions(model);
+        return;
+    }
+    settingsCustomPlatformModels[platform].push(model);
+    if (input) input.value = '';
+    renderCustomModelList();
+    syncModelOptions(model);
+    showSettingsToast(`模型已添加到 ${platform}：${model}`, 'success');
+}
+
+function removeCustomModel(platform, model) {
+    settingsCustomPlatformModels[platform] = (settingsCustomPlatformModels[platform] || []).filter((m) => m !== model);
+    renderCustomModelList();
+    syncModelOptions(document.getElementById('set-ai-model')?.value || '');
+}
+
+function removeCustomPlatform(platform) {
+    settingsCustomPlatforms = settingsCustomPlatforms.filter((p) => p !== platform);
+    delete settingsCustomPlatformModels[platform];
+
+    const current = normalizePlatformName(document.getElementById('set-ai-platform')?.value || 'google');
+    const next = current === platform ? getAllPlatforms()[0] || 'google' : current;
+    renderPlatformOptions(next);
+    applyPlatformBaseUrl(next, true);
+    renderCustomPlatformList();
+    syncModelOptions();
+    renderCustomModelList();
+}
+
+// 轻量提示弹层（设置保存专用）
+let centerToastWrapper = null;
+let centerToastEl = null;
+function showCenterToast(message, type = 'info', persistent = false) {
+    if (!centerToastWrapper) {
+        centerToastWrapper = document.createElement('div');
+        centerToastWrapper.id = 'center-toast-wrapper';
+        centerToastWrapper.style.position = 'fixed';
+        centerToastWrapper.style.inset = '0';
+        centerToastWrapper.style.display = 'flex';
+        centerToastWrapper.style.alignItems = 'center';
+        centerToastWrapper.style.justifyContent = 'center';
+        centerToastWrapper.style.pointerEvents = 'none';
+        centerToastWrapper.style.zIndex = '9999';
+        document.body.appendChild(centerToastWrapper);
+    }
+    if (!centerToastEl) {
+        centerToastEl = document.createElement('div');
+        centerToastEl.id = 'center-toast';
+        centerToastEl.style.minWidth = '260px';
+        centerToastEl.style.maxWidth = '90%';
+        centerToastEl.style.padding = '18px 20px';
+        centerToastEl.style.borderRadius = '14px';
+        centerToastEl.style.boxShadow = '0 15px 40px rgba(0,0,0,0.35)';
+        centerToastEl.style.backdropFilter = 'blur(10px)';
+        centerToastEl.style.textAlign = 'center';
+        centerToastEl.style.fontWeight = '700';
+        centerToastEl.style.lineHeight = '1.5';
+        centerToastEl.style.color = '#e2e8f0';
+        centerToastEl.style.cursor = 'pointer';
+        centerToastEl.style.pointerEvents = 'auto';
+        centerToastWrapper.appendChild(centerToastEl);
+        centerToastEl.addEventListener('click', () => {
+            centerToastEl.style.display = 'none';
+            centerToastWrapper.style.display = 'none';
+        });
+    }
+
+    const palette = {
+        success: { bg: 'rgba(34,197,94,0.9)', text: '#ecfdf3' },
+        error: { bg: 'rgba(239,68,68,0.92)', text: '#fff1f2' },
+        info: { bg: 'rgba(55,65,81,0.9)', text: '#e5e7eb' },
+        warn: { bg: 'rgba(234,179,8,0.95)', text: '#1f2937' }
+    };
+    const p = palette[type] || palette.info;
+
+    centerToastEl.textContent = message;
+    centerToastEl.style.background = p.bg;
+    centerToastEl.style.color = p.text;
+    centerToastEl.style.border = '1px solid rgba(255,255,255,0.15)';
+    centerToastWrapper.style.display = 'flex';
+    centerToastEl.style.display = 'block';
+
+    if (!persistent) {
+        clearTimeout(centerToastEl._timer);
+        centerToastEl._timer = setTimeout(() => {
+            centerToastEl.style.display = 'none';
+            centerToastWrapper.style.display = 'none';
+        }, 3600);
+    }
+}
+
+function showSettingsToast(message, type = 'info', persistent = false) {
+    showCenterToast(message, type, persistent);
 }
 
 async function loadSettings() {
@@ -1914,12 +3001,40 @@ async function loadSettings() {
         const ai = cfg.ai || {};
         const periods = cfg.chart_periods || {};
 
-        // AI 配置
-        const platformEl = document.getElementById('set-ai-platform');
-        if (platformEl) platformEl.value = ai.platform || 'google';
+        settingsCustomPlatforms = Array.isArray(ai.custom_platforms)
+            ? ai.custom_platforms.map(normalizePlatformName).filter(Boolean)
+            : [];
+        settingsCustomPlatformModels = (ai.custom_platform_models && typeof ai.custom_platform_models === 'object')
+            ? Object.fromEntries(
+                Object.entries(ai.custom_platform_models).map(([k, v]) => [
+                    normalizePlatformName(k),
+                    Array.isArray(v) ? v.map(normalizeModelName).filter(Boolean) : []
+                ])
+            )
+            : {};
 
-        const modelEl = document.getElementById('set-ai-model');
-        if (modelEl) modelEl.value = ai.model || '';
+        // 兼容旧字段 custom_models：将其归入当前平台
+        if (Array.isArray(ai.custom_models) && ai.custom_models.length > 0) {
+            const legacyPlatform = normalizePlatformName(ai.platform || 'google');
+            settingsCustomPlatformModels[legacyPlatform] = settingsCustomPlatformModels[legacyPlatform] || [];
+            ai.custom_models.map(normalizeModelName).filter(Boolean).forEach((m) => {
+                if (!settingsCustomPlatformModels[legacyPlatform].includes(m)) {
+                    settingsCustomPlatformModels[legacyPlatform].push(m);
+                }
+            });
+        }
+
+        // AI 配置
+        renderPlatformOptions(ai.platform || 'google');
+        renderCustomPlatformList();
+        syncModelOptions(ai.model || '');
+        renderCustomModelList();
+
+        const baseEl = document.getElementById('set-ai-base');
+        if (baseEl) {
+            baseEl.value = ai.api_base || getDefaultBaseUrl(ai.platform || 'google');
+        }
+        applyPlatformBaseUrl(ai.platform || 'google', false);
 
         const keyEl = document.getElementById('set-ai-key');
         if (keyEl) keyEl.value = ''; // 不回显明文
@@ -1970,6 +3085,8 @@ async function saveSettings() {
             ai: {
                 platform: document.getElementById('set-ai-platform')?.value || 'google',
                 model: document.getElementById('set-ai-model')?.value || 'gemini-2.5-pro',
+                custom_platforms: settingsCustomPlatforms.slice(),
+                custom_platform_models: JSON.parse(JSON.stringify(settingsCustomPlatformModels)),
             },
             chart_periods: {
                 zodiac_trend: parseInt(document.getElementById('set-zodiac-trend')?.value) || 200,
@@ -1989,16 +3106,33 @@ async function saveSettings() {
         if (keyVal && keyVal.trim().length > 0) {
             payload.ai.api_key = keyVal.trim();
         }
+        const baseVal = document.getElementById('set-ai-base')?.value;
+        if (baseVal && baseVal.trim().length > 0) {
+            payload.ai.api_base = baseVal.trim();
+        }
 
-        const res = await fetch('/api/settings', {
+        const res = await apiFetch('/api/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-        const result = await res.json();
+        
+        let result;
+        try {
+            result = await res.json();
+        } catch (je) {
+            throw new Error(`服务器返回了非预期的格式 (HTTP ${res.status})`);
+        }
 
         if (result.success) {
             if (btn) btn.textContent = '✅ 已保存';
+            if (result.note) {
+                showSettingsToast(result.note, 'info');
+            }
+            if (result.points_deducted && result.points_deducted > 0) {
+                const balanceText = result.points_balance !== null && result.points_balance !== undefined ? `，剩余 ${result.points_balance} 积分` : '';
+                showSettingsToast(`本次设置保存扣除 ${result.points_deducted} 积分${balanceText}`, 'warn');
+            }
             // 关闭弹窗并刷新统计数据
             setTimeout(() => {
                 document.getElementById('settings-modal').style.display = 'none';
@@ -2008,11 +3142,11 @@ async function saveSettings() {
                 loadStatistics();
             }, 800);
         } else {
-            alert('保存失败: ' + (result.error || '未知错误'));
+            showSettingsToast('保存失败: ' + (result.error || '未知错误'), 'error', true);
             if (btn) { btn.textContent = origText; btn.disabled = false; }
         }
     } catch (e) {
-        alert('网络错误: ' + e.message);
+        showSettingsToast('网络错误: ' + e.message, 'error', true);
         if (btn) { btn.textContent = origText; btn.disabled = false; }
     }
 }
@@ -2020,6 +3154,7 @@ async function saveSettings() {
 // ==================== AI 分析档案加载与渲染 ====================
 
 async function loadAIHistory(page = 1) {
+    state.aiHistoryPage = page;
     const container = document.getElementById('ai-history-container');
     const pagination = document.getElementById('ai-pagination');
     if (!container) return;
@@ -2093,10 +3228,10 @@ function renderAIHistory(items) {
         }
 
         return `
-            <div class="stat-card glass" style="text-align: left; padding: 28px; margin-bottom: 24px;">
-                <div style="display: flex; flex-direction: row; gap: 32px; align-items: flex-start;">
-                    <!-- 左侧纵向工具树 (压缩至 240px) -->
-                    <div style="flex: 0 0 240px; min-width: 240px; display: flex; flex-direction: column; gap: 20px;">
+            <div class="ai-card stat-card glass" style="text-align: left; padding: 28px; margin-bottom: 24px;">
+                <div class="ai-card-layout">
+                    <!-- 左侧工具面板 -->
+                    <div class="ai-card-sidebar">
                         <!-- 模型与状态信息块 -->
                         <div style="background: rgba(255,255,255,0.03); border-radius: 14px; padding: 16px; border: 1px solid rgba(255,255,255,0.06); position: relative; overflow: hidden;">
                             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
@@ -2105,11 +3240,30 @@ function renderAIHistory(items) {
                             </div>
                             <div style="font-size: 0.75rem; color: #9ca3af; margin-bottom: 14px;">
                                 <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                                    <span>🗓️ ${item.generated_at.split(' ')[0]}</span>
-                                    <span>🕒 ${item.generated_at.split(' ')[1]}</span>
+                                    <span>🗓️ ${
+                                        (function(){
+                                            try {
+                                                const d = new Date(item.generated_at + 'Z');
+                                                if(isNaN(d.getTime())) return item.generated_at.split(' ')[0];
+                                                return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                                            } catch(e) { return item.generated_at.split(' ')[0]; }
+                                        })()
+                                    }</span>
+                                    <span>🕒 ${
+                                        (function(){
+                                            try {
+                                                const d = new Date(item.generated_at + 'Z');
+                                                if(isNaN(d.getTime())) return item.generated_at.split(' ')[1];
+                                                return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+                                            } catch(e) { return item.generated_at.split(' ')[1]; }
+                                        })()
+                                    }</span>
                                 </div>
                             </div>
-                            <button class="btn-sync" style="width: 100%; background: rgba(239, 68, 68, 0.1); color: #fca5a5; border-color: rgba(239, 68, 68, 0.2); font-size: 0.7rem; padding: 6px; border-radius: 6px;" onclick="deleteAIHistory(${item.id})">🗑️ 删除档案</button>
+                            <div style="display: flex; gap: 6px;">
+                                <button class="btn-sync" style="flex: 1; background: rgba(34, 197, 94, 0.1); color: #86efac; border-color: rgba(34, 197, 94, 0.2); font-size: 0.7rem; padding: 6px; border-radius: 6px;" onclick="shareAICard(this)">📤 分享图片</button>
+                                <button class="btn-sync" style="flex: 1; background: rgba(239, 68, 68, 0.1); color: #fca5a5; border-color: rgba(239, 68, 68, 0.2); font-size: 0.7rem; padding: 6px; border-radius: 6px;" onclick="deleteAIHistory(${item.id})">🗑️ 删除档案</button>
+                            </div>
                         </div>
 
                         <!-- 预测球/排名 -->
@@ -2140,9 +3294,9 @@ function renderAIHistory(items) {
                         </div>
                     </div>
 
-                    <!-- 右侧推理文字区 (极大化) -->
-                    <div style="flex: 1; min-width: 0;">
-                        <div style="background: rgba(0,0,0,0.18); border-radius: 16px; padding: 32px; font-size: 1.15rem; line-height: 2; color: #f9fafb; border: 1px solid rgba(255,255,255,0.03); white-space: pre-wrap; letter-spacing: 0.3px; box-shadow: inset 0 2px 12px rgba(0,0,0,0.3);">
+                    <!-- 推理文字区 -->
+                    <div class="ai-card-main">
+                        <div class="ai-card-analysis">
                             ${ai.analysis || '无有效推断文字'}
                         </div>
                     </div>
@@ -2150,6 +3304,78 @@ function renderAIHistory(items) {
             </div>
         `;
     }).join('');
+}
+
+
+// ==================== AI 档案分享为图片 ====================
+async function shareAICard(btnEl) {
+    // 找到最近的 .stat-card 父级
+    const card = btnEl.closest('.stat-card');
+    if (!card) return;
+
+    const origText = btnEl.textContent;
+    btnEl.textContent = '⏳ 生成中...';
+    btnEl.disabled = true;
+
+    try {
+        // 临时调整样式以获得更好的截图效果
+        card.style.boxShadow = 'none';
+
+        // 添加水印
+        const watermark = document.createElement('div');
+        watermark.style.cssText = 'text-align:center; padding:12px 0 4px; font-size:0.72rem; color:#6b7280; border-top:1px solid rgba(255,255,255,0.06); margin-top:16px;';
+        watermark.textContent = '🎰 六合彩智能分析系统 · AI 推算档案';
+        card.appendChild(watermark);
+
+        const canvas = await html2canvas(card, {
+            backgroundColor: '#0f172a',
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            allowTaint: true,
+            removeContainer: true,
+        });
+
+        // 移除水印
+        card.removeChild(watermark);
+        card.style.boxShadow = '';
+
+        // 尝试使用 Web Share API (移动端优先)
+        if (navigator.share && navigator.canShare) {
+            canvas.toBlob(async (blob) => {
+                const file = new File([blob], 'AI分析档案.png', { type: 'image/png' });
+                try {
+                    await navigator.share({
+                        title: 'AI 智能推算档案',
+                        text: '六合彩智能分析系统 - AI 推算结果',
+                        files: [file]
+                    });
+                } catch (shareErr) {
+                    // 用户取消分享或不支持，fallback 到下载
+                    downloadCanvas(canvas);
+                }
+            }, 'image/png');
+        } else {
+            // 桌面端直接下载
+            downloadCanvas(canvas);
+        }
+    } catch (err) {
+        console.error('生成图片失败:', err);
+        alert('生成图片失败: ' + err.message);
+        card.style.boxShadow = '';
+    } finally {
+        btnEl.textContent = origText;
+        btnEl.disabled = false;
+    }
+}
+
+function downloadCanvas(canvas, prefix = "AI分析档案") {
+    const link = document.createElement('a');
+    const now = new Date();
+    const ts = now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0') + '_' + String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0');
+    link.download = `${prefix}_${ts}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
 }
 
 function renderAIPagination(data) {

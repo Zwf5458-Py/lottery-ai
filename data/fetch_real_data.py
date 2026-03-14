@@ -21,8 +21,9 @@ logger = get_logger()
 
 # 创建不验证证书的 SSL 上下文（解决部分环境 SSL 握手失败问题）
 ssl_context = ssl.create_default_context()
-ssl_context.check_hostname = False
-ssl_context.verify_mode = ssl.CERT_NONE
+if os.environ.get('INSECURE_SSL', '0') == '1':
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
 
 # 数据库路径
 DB_DIR = os.path.dirname(__file__)

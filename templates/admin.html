@@ -12,30 +12,54 @@
             box-sizing: border-box;
         }
 
+        :root {
+            --panel-bg: rgba(19, 26, 46, 0.78);
+            --panel-border: rgba(148, 163, 184, 0.12);
+            --panel-soft: rgba(15, 23, 42, 0.42);
+            --text-main: #e5e7eb;
+            --text-soft: #94a3b8;
+            --brand-a: #f59e0b;
+            --brand-b: #8b5cf6;
+            --brand-c: #22c55e;
+        }
+
         body {
             min-height: 100vh;
-            background: linear-gradient(135deg, #0f0c29 0%, #1a1333 50%, #24243e 100%);
+            background:
+                radial-gradient(circle at top left, rgba(245, 158, 11, 0.16), transparent 22%),
+                radial-gradient(circle at top right, rgba(139, 92, 246, 0.18), transparent 24%),
+                linear-gradient(145deg, #07111f 0%, #111827 52%, #1f2340 100%);
             font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
-            color: #e5e7eb;
+            color: var(--text-main);
         }
 
         .admin-header {
-            background: rgba(30, 30, 60, 0.9);
-            backdrop-filter: blur(12px);
-            border-bottom: 1px solid rgba(120, 80, 255, 0.15);
-            padding: 16px 32px;
+            background: rgba(8, 15, 30, 0.76);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid rgba(120, 80, 255, 0.12);
+            padding: 18px 28px;
             display: flex;
             align-items: center;
             justify-content: space-between;
+            gap: 16px;
+            position: sticky;
+            top: 0;
+            z-index: 20;
         }
 
         .admin-header h1 {
-            font-size: 1.4rem;
-            font-weight: 800;
-            background: linear-gradient(135deg, #f59e0b, #ef4444);
+            font-size: 1.55rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, #f59e0b, #ef4444, #8b5cf6);
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
+        }
+
+        .header-meta {
+            margin-top: 6px;
+            font-size: 0.84rem;
+            color: var(--text-soft);
         }
 
         .admin-header .nav-links {
@@ -61,24 +85,29 @@
         }
 
         .admin-container {
-            max-width: 1100px;
-            margin: 32px auto;
-            padding: 0 24px;
+            max-width: 1320px;
+            margin: 28px auto 40px;
+            padding: 0 20px;
+        }
+
+        .dashboard-stack {
+            display: grid;
+            gap: 20px;
         }
 
         .stats-row {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 16px;
-            margin-bottom: 28px;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
         }
 
         .stat-card {
-            background: rgba(30, 30, 60, 0.7);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: 14px;
-            padding: 20px 24px;
-            text-align: center;
+            background: linear-gradient(180deg, rgba(19, 26, 46, 0.9), rgba(12, 18, 34, 0.86));
+            border: 1px solid var(--panel-border);
+            border-radius: 18px;
+            padding: 18px 20px;
+            text-align: left;
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
         }
 
         .stat-card .stat-num {
@@ -94,10 +123,182 @@
         }
 
         .panel {
-            background: rgba(30, 30, 60, 0.7);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: 16px;
-            padding: 28px;
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: 0 18px 34px rgba(0, 0, 0, 0.18);
+        }
+
+        .panel-shell {
+            display: grid;
+            gap: 20px;
+        }
+
+        .two-col {
+            display: grid;
+            grid-template-columns: 1.1fr 0.9fr;
+            gap: 20px;
+            align-items: start;
+        }
+
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .config-item {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .config-item label {
+            font-size: 0.82rem;
+            color: #cbd5e1;
+            font-weight: 700;
+        }
+
+        .config-item input {
+            padding: 9px 12px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 10px;
+            color: #fff;
+            outline: none;
+            font-size: 0.88rem;
+        }
+
+        .config-item input:focus {
+            border-color: rgba(167, 139, 250, 0.7);
+        }
+
+        .config-help {
+            font-size: 0.78rem;
+            color: #94a3b8;
+            line-height: 1.45;
+        }
+
+        .config-actions {
+            margin-top: 18px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .action-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .tool-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 10px;
+            border-radius: 14px;
+            background: rgba(15, 23, 42, 0.34);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+        }
+
+        .ai-config-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .ai-config-card {
+            padding: 16px;
+            border-radius: 14px;
+            background: rgba(15, 23, 42, 0.42);
+            border: 1px solid rgba(148, 163, 184, 0.14);
+        }
+
+        .ai-config-card h3 {
+            font-size: 0.96rem;
+            color: #f8fafc;
+            margin-bottom: 10px;
+        }
+
+        .kv-list {
+            display: grid;
+            gap: 8px;
+        }
+
+        .kv-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            font-size: 0.84rem;
+            color: #cbd5e1;
+            border-bottom: 1px dashed rgba(148, 163, 184, 0.12);
+            padding-bottom: 6px;
+        }
+
+        .kv-row span:first-child {
+            color: #94a3b8;
+            white-space: nowrap;
+        }
+
+        .kv-row code {
+            color: #f8fafc;
+            word-break: break-all;
+        }
+
+        .diag-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 14px;
+        }
+
+        .diag-card {
+            padding: 14px;
+            border-radius: 14px;
+            background: rgba(15, 23, 42, 0.42);
+            border: 1px solid rgba(148, 163, 184, 0.14);
+        }
+
+        .diag-light {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            box-shadow: 0 0 12px currentColor;
+        }
+
+        .diag-green { color: #4ade80; background: #4ade80; }
+        .diag-yellow { color: #facc15; background: #facc15; }
+        .diag-red { color: #f87171; background: #f87171; }
+
+        .btn-primary {
+            padding: 9px 16px;
+            border: none;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #7c3aed, #6d28d9);
+            color: #fff;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .btn-secondary {
+            padding: 9px 16px;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            border-radius: 10px;
+            background: rgba(30, 41, 59, 0.7);
+            color: #e2e8f0;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .btn-primary:hover,
+        .btn-secondary:hover,
+        .search-box button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
         }
 
         .panel-header {
@@ -105,6 +306,12 @@
             align-items: center;
             justify-content: space-between;
             margin-bottom: 20px;
+            gap: 14px;
+        }
+
+        .panel-title-group {
+            display: grid;
+            gap: 6px;
         }
 
         .panel-header h2 {
@@ -147,10 +354,18 @@
             background: #6d28d9;
         }
 
+        .table-wrap {
+            overflow: auto;
+            border-radius: 16px;
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            background: rgba(15, 23, 42, 0.3);
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 8px;
+            margin-top: 0;
+            min-width: 980px;
         }
 
         th,
@@ -198,6 +413,7 @@
         .action-btns {
             display: flex;
             gap: 6px;
+            flex-wrap: wrap;
         }
 
         .action-btns button {
@@ -303,6 +519,74 @@
             color: #fff;
         }
 
+        .confirm-modal {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }
+
+        .confirm-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(2, 6, 23, 0.65);
+            backdrop-filter: blur(4px);
+        }
+
+        .confirm-panel {
+            position: relative;
+            width: min(92vw, 460px);
+            background: rgba(30, 30, 60, 0.95);
+            border: 1px solid rgba(167, 139, 250, 0.25);
+            border-radius: 14px;
+            padding: 18px 18px 14px;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+        }
+
+        .confirm-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #e9d5ff;
+            margin-bottom: 10px;
+        }
+
+        .confirm-message {
+            font-size: 0.92rem;
+            line-height: 1.6;
+            color: #e5e7eb;
+            margin-bottom: 16px;
+            word-break: break-word;
+        }
+
+        .confirm-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .confirm-btn {
+            border: none;
+            border-radius: 10px;
+            padding: 8px 16px;
+            font-size: 0.88rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .confirm-btn.cancel {
+            background: rgba(71, 85, 105, 0.5);
+            color: #e2e8f0;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+        }
+
+        .confirm-btn.ok {
+            background: linear-gradient(135deg, #7c3aed, #6d28d9);
+            color: #fff;
+            border: 1px solid rgba(167, 139, 250, 0.45);
+        }
+
         @keyframes slideUp {
             from {
                 opacity: 0;
@@ -314,21 +598,103 @@
                 transform: translateY(0);
             }
         }
+
+        @media (max-width: 1100px) {
+            .stats-row {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .two-col {
+                grid-template-columns: 1fr;
+            }
+
+            .config-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .diag-grid,
+            .ai-config-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 680px) {
+            .config-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stats-row {
+                grid-template-columns: 1fr;
+            }
+
+            .admin-header {
+                padding: 14px 16px;
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .admin-container {
+                padding: 0 14px;
+            }
+
+            .panel {
+                padding: 18px;
+            }
+
+            .nav-links,
+            .search-box,
+            .action-toolbar,
+            .tool-group {
+                width: 100%;
+            }
+
+            .nav-links,
+            .search-box {
+                flex-wrap: wrap;
+            }
+
+            .search-box input {
+                width: 100%;
+            }
+        }
     </style>
+
+    <!-- CSRF Token Global Setup -->
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <script>
+        const originalFetch = window.fetch;
+        window.fetch = async function(resource, config) {
+            config = config || {};
+            const method = (config.method || 'GET').toUpperCase();
+            if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+                config.headers = {
+                    ...config.headers,
+                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content
+                };
+            }
+            return originalFetch(resource, config);
+        };
+    </script>
 </head>
 
 <body>
     <header class="admin-header">
-        <h1>🛡️ 后台管理控制台</h1>
+        <div>
+            <h1>🛡️ 后台管理控制台</h1>
+            <div class="header-meta">统一管理计费策略、模型运维、用户权限与系统健康状态</div>
+        </div>
         <div class="nav-links">
             <span style="font-size:0.85rem; color:#d1d5db;">👤 {{ user.username }}</span>
             <span class="role-badge role-admin">管理员</span>
+            <a href="/admin/ai-ops">🧠 模型运维</a>
+            <a href="/health">🩺 健康页</a>
             <a href="/">🏠 返回主站</a>
             <a href="/logout" style="color:#f87171; border-color:rgba(239,68,68,0.3);">🚪 退出</a>
         </div>
     </header>
 
     <div class="admin-container">
+        <div class="dashboard-stack">
         <!-- 统计卡片 -->
         <div class="stats-row">
             <div class="stat-card">
@@ -349,10 +715,60 @@
             </div>
         </div>
 
+        <!-- 计费与奖励配置 -->
+        <div class="panel">
+            <div class="panel-header">
+                <div class="panel-title-group">
+                    <h2>⚙️ 计费与奖励配置</h2>
+                    <span class="config-help">修改后实时生效，影响 AI 扣分、设置扣分与推荐奖励策略。</span>
+                </div>
+            </div>
+
+            <div class="config-grid">
+                <div class="config-item">
+                    <label for="cfg-ai-sim-cost">AI 每次模拟扣分</label>
+                    <input id="cfg-ai-sim-cost" type="number" min="0" step="1" placeholder="5">
+                </div>
+                <div class="config-item">
+                    <label for="cfg-settings-cost">设置修改扣分</label>
+                    <input id="cfg-settings-cost" type="number" min="0" step="1" placeholder="1">
+                </div>
+                <div class="config-item">
+                    <label for="cfg-share-ratio">推荐奖励比例</label>
+                    <input id="cfg-share-ratio" type="number" min="0" step="0.01" placeholder="0.20">
+                    <span class="config-help">按基础积分 * 比例计算奖励。示例：0.2 = 20%</span>
+                </div>
+                <div class="config-item">
+                    <label for="cfg-share-points">固定奖励积分(兜底)</label>
+                    <input id="cfg-share-points" type="number" min="0" step="1" placeholder="10">
+                </div>
+                <div class="config-item">
+                    <label for="cfg-share-min">首充达标金额(元)</label>
+                    <input id="cfg-share-min" type="number" min="0" step="0.01" placeholder="5">
+                </div>
+                <div class="config-item">
+                    <label for="cfg-points-per-yuan">每元兑换积分</label>
+                    <input id="cfg-points-per-yuan" type="number" min="0" step="1" placeholder="10">
+                </div>
+                <div class="config-item">
+                    <label for="cfg-vip-fee">VIP 月费(元)</label>
+                    <input id="cfg-vip-fee" type="number" min="0" step="1" placeholder="99">
+                </div>
+            </div>
+
+            <div class="config-actions">
+                <button class="btn-primary" onclick="saveSystemConfig()">💾 保存配置</button>
+                <button class="btn-secondary" onclick="loadSystemConfig()">↻ 重新加载</button>
+            </div>
+        </div>
+
         <!-- 用户管理面板 -->
         <div class="panel">
             <div class="panel-header">
-                <h2>👥 用户管理</h2>
+                <div class="panel-title-group">
+                    <h2>👥 用户管理</h2>
+                    <span class="config-help">支持搜索、切换身份、充值扣分、角色调整与密码重置。</span>
+                </div>
                 <div class="search-box">
                     <input type="text" id="searchInput" placeholder="搜索用户名或邮箱..."
                         onkeyup="if(event.key==='Enter') searchUsers()">
@@ -360,12 +776,14 @@
                 </div>
             </div>
 
+            <div class="table-wrap">
             <table>
                 <thead>
                     <tr>
                         <th>ID</th>
                         <th>用户名</th>
                         <th>邮箱</th>
+                        <th>积分</th>
                         <th>角色</th>
                         <th>注册时间</th>
                         <th>操作</th>
@@ -373,18 +791,33 @@
                 </thead>
                 <tbody id="userTableBody">
                     <tr>
-                        <td colspan="6" class="empty-state">加载中...</td>
+                        <td colspan="7" class="empty-state">加载中...</td>
                     </tr>
                 </tbody>
             </table>
+            </div>
 
             <div class="pagination" id="pagination"></div>
+        </div>
         </div>
     </div>
 
     <!-- Toast 提示 -->
     <div class="toast toast-success" id="toast-success"></div>
     <div class="toast toast-error" id="toast-error"></div>
+
+    <!-- 自定义确认弹窗 -->
+    <div class="confirm-modal" id="confirm-modal">
+        <div class="confirm-overlay" id="confirm-overlay"></div>
+        <div class="confirm-panel" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+            <div class="confirm-title" id="confirm-title">操作确认</div>
+            <div class="confirm-message" id="confirm-message"></div>
+            <div class="confirm-actions">
+                <button class="confirm-btn cancel" id="confirm-cancel" type="button">取消</button>
+                <button class="confirm-btn ok" id="confirm-ok" type="button">确定</button>
+            </div>
+        </div>
+    </div>
 
     <script>
         let currentPage = 1;
@@ -397,6 +830,43 @@
             setTimeout(() => el.style.display = 'none', 3000);
         }
 
+        function showConfirmModal(message, title = '操作确认') {
+            return new Promise((resolve) => {
+                const modal = document.getElementById('confirm-modal');
+                const overlay = document.getElementById('confirm-overlay');
+                const titleEl = document.getElementById('confirm-title');
+                const messageEl = document.getElementById('confirm-message');
+                const okBtn = document.getElementById('confirm-ok');
+                const cancelBtn = document.getElementById('confirm-cancel');
+
+                titleEl.textContent = title;
+                messageEl.textContent = message;
+                modal.style.display = 'flex';
+
+                const done = (result) => {
+                    modal.style.display = 'none';
+                    overlay.removeEventListener('click', onCancel);
+                    cancelBtn.removeEventListener('click', onCancel);
+                    okBtn.removeEventListener('click', onOk);
+                    document.removeEventListener('keydown', onKeyDown);
+                    resolve(result);
+                };
+
+                const onCancel = () => done(false);
+                const onOk = () => done(true);
+                const onKeyDown = (e) => {
+                    if (e.key === 'Escape') done(false);
+                    if (e.key === 'Enter') done(true);
+                };
+
+                overlay.addEventListener('click', onCancel);
+                cancelBtn.addEventListener('click', onCancel);
+                okBtn.addEventListener('click', onOk);
+                document.addEventListener('keydown', onKeyDown);
+                okBtn.focus();
+            });
+        }
+
         function getRoleBadge(role) {
             const cls = { trial: 'role-trial', vip: 'role-vip', admin: 'role-admin' };
             const label = { trial: '体验版', vip: 'VIP', admin: '管理员' };
@@ -407,11 +877,8 @@
             let html = '<div class="action-btns">';
             // 演示数据生成按钮
             html += `<button class="btn-trial" style="background:rgba(192,132,252,0.15); color:#c084fc; border:1px solid rgba(192,132,252,0.3) !important;" onclick="seedData(${user.id})" title="生成15条仿真模拟记录">🪄 种子工程</button>`;
-
-            if (user.role === 'admin') {
-                html += '</div>';
-                return html;
-            }
+            html += `<button class="btn-vip" style="background:rgba(34,197,94,0.16); color:#86efac; border:1px solid rgba(34,197,94,0.35) !important;" onclick="rechargePoints(${user.id}, '${user.username.replace(/'/g,"&#39;")}')">💎 充值</button>`;
+            html += `<button class="btn-trial" style="background:rgba(248,113,113,0.15); color:#fca5a5; border:1px solid rgba(248,113,113,0.35) !important;" onclick="deductPoints(${user.id}, '${user.username.replace(/'/g,"&#39;")}')">➖ 扣分</button>`;
 
             if (user.role !== 'vip') {
                 html += `<button class="btn-vip" onclick="setRole(${user.id},'vip')">升级 VIP</button>`;
@@ -420,6 +887,7 @@
                 html += `<button class="btn-trial" onclick="setRole(${user.id},'trial')">降为体验</button>`;
             }
             html += `<button class="btn-admin" onclick="setRole(${user.id},'admin')">设管理员</button>`;
+            html += `<button class="btn-trial" style="background:rgba(239,68,68,0.18); color:#fca5a5; border:1px solid rgba(239,68,68,0.3) !important;" onclick="resetPassword(${user.id}, '${user.username.replace(/'/g,"&#39;")}')">重置密码</button>`;
             html += '</div>';
             return html;
         }
@@ -449,13 +917,14 @@
                 // 渲染表格
                 const tbody = document.getElementById('userTableBody');
                 if (data.users.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">暂无用户数据</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">暂无用户数据</td></tr>';
                 } else {
                     tbody.innerHTML = data.users.map(u => `
                         <tr>
                             <td style="color:#6b7280;">#${u.id}</td>
-                            <td style="font-weight:600;">${u.username}</td>
+                            <td style="font-weight:600;"><a href="javascript:void(0);" style="color:#e0e7ff; text-decoration:none;" onclick="impersonate(${u.id}, '${u.username.replace(/'/g,"&#39;")}')">${u.username}</a></td>
                             <td style="color:#9ca3af;">${u.email || '—'}</td>
+                            <td style="color:#86efac; font-weight:700;">${Number(u.points || 0).toLocaleString()}</td>
                             <td>${getRoleBadge(u.role)}</td>
                             <td style="color:#9ca3af; font-size:0.82rem;">${u.created_at || '—'}</td>
                             <td>${getRoleActions(u)}</td>
@@ -484,8 +953,73 @@
             } catch (e) { }
         }
 
+        function readNumber(id, fallback = 0) {
+            const raw = document.getElementById(id).value;
+            const n = Number(raw);
+            if (!Number.isFinite(n) || n < 0) return fallback;
+            return n;
+        }
+
+        function setConfigFormValue(cfg = {}) {
+            document.getElementById('cfg-ai-sim-cost').value = Number(cfg.ai_sim_cost ?? 5);
+            document.getElementById('cfg-settings-cost').value = Number(cfg.settings_change_cost ?? 1);
+            document.getElementById('cfg-share-ratio').value = Number(cfg.share_reward_ratio ?? 0.2);
+            document.getElementById('cfg-share-points').value = Number(cfg.share_reward_points ?? 10);
+            document.getElementById('cfg-share-min').value = Number(cfg.share_recharge_min ?? 5);
+            document.getElementById('cfg-points-per-yuan').value = Number(cfg.points_per_yuan ?? 10);
+            document.getElementById('cfg-vip-fee').value = Number(cfg.vip_monthly_fee ?? 99);
+        }
+
+        async function loadSystemConfig() {
+            try {
+                const res = await fetch('/api/admin/system-config');
+                const data = await res.json();
+                if (!data.success) {
+                    showToast(data.error || '加载配置失败', 'error');
+                    return;
+                }
+                setConfigFormValue(data.data || {});
+            } catch (e) {
+                showToast('加载配置失败: ' + e.message, 'error');
+            }
+        }
+
+        async function saveSystemConfig() {
+            const payload = {
+                ai_sim_cost: Math.round(readNumber('cfg-ai-sim-cost', 5)),
+                settings_change_cost: Math.round(readNumber('cfg-settings-cost', 1)),
+                share_reward_ratio: readNumber('cfg-share-ratio', 0.2),
+                share_reward_points: Math.round(readNumber('cfg-share-points', 10)),
+                share_recharge_min: readNumber('cfg-share-min', 5),
+                points_per_yuan: Math.round(readNumber('cfg-points-per-yuan', 10)),
+                vip_monthly_fee: Math.round(readNumber('cfg-vip-fee', 99))
+            };
+
+            if (payload.share_reward_ratio > 1) {
+                const proceed = await showConfirmModal('奖励比例当前大于 1（即超过 100%），确认继续保存吗？', '配置确认');
+                if (!proceed) return;
+            }
+
+            try {
+                const res = await fetch('/api/admin/system-config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    showToast(data.error || '保存失败', 'error');
+                    return;
+                }
+                showToast('✅ 系统配置已保存');
+                await loadSystemConfig();
+            } catch (e) {
+                showToast('保存失败: ' + e.message, 'error');
+            }
+        }
+
         async function seedData(userId) {
-            if (!confirm('确定要为该用户注入 15 条仿真的 AI 模拟记录吗？（仅用于功能演示）')) return;
+            if (!await showConfirmModal('确定要为该用户注入 15 条仿真的 AI 模拟记录吗？（仅用于功能演示）', '注入确认')) return;
             try {
                 const res = await fetch('/api/admin/seed-data', {
                     method: 'POST',
@@ -523,7 +1057,7 @@
 
         async function setRole(userId, role) {
             const labels = { trial: '体验版', vip: 'VIP', admin: '管理员' };
-            if (!confirm(`确定要将该用户角色设为「${labels[role]}」吗？`)) return;
+            if (!await showConfirmModal(`确定要将该用户角色设为「${labels[role]}」吗？`, '角色变更确认')) return;
             try {
                 const res = await fetch(`/api/admin/users/${userId}/role`, {
                     method: 'POST',
@@ -542,7 +1076,108 @@
             }
         }
 
+        async function impersonate(userId, username) {
+            if (!await showConfirmModal(`将切换登录为用户 ${username}，确认继续？`, '模拟登录确认')) return;
+            try {
+                const res = await fetch('/api/admin/impersonate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message || '已切换登录');
+                    const redirect = data.redirect || '/';
+                    window.location.href = redirect;
+                } else {
+                    showToast(data.error || '切换失败', 'error');
+                }
+            } catch (e) {
+                showToast('切换失败: ' + e.message, 'error');
+            }
+        }
+
+        async function resetPassword(userId, username) {
+            if (!await showConfirmModal(`确认将 ${username} 的密码重置为 666777 吗？`, '重置密码确认')) return;
+            try {
+                const res = await fetch('/api/admin/reset-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId, password: '666777' })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('已重置密码为 666777');
+                } else {
+                    showToast(data.error || '重置失败', 'error');
+                }
+            } catch (e) {
+                showToast('重置失败: ' + e.message, 'error');
+            }
+        }
+
+        async function rechargePoints(userId, username) {
+            const amountText = prompt(`请输入给用户 ${username} 的充值金额（元）`, '10');
+            if (amountText === null) return;
+            const amount = Number(amountText);
+            if (!Number.isFinite(amount) || amount <= 0) {
+                showToast('充值金额必须大于 0', 'error');
+                return;
+            }
+            if (!await showConfirmModal(`确认给 ${username} 充值 ${amount.toFixed(2)} 元吗？`, '充值确认')) return;
+
+            try {
+                const res = await fetch('/api/admin/recharge', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId, amount })
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    showToast(data.error || '充值失败', 'error');
+                    return;
+                }
+                const points = data?.data?.points_added ?? 0;
+                showToast(`✅ 充值成功，到账 ${points} 积分`);
+                loadUsers(currentPage);
+            } catch (e) {
+                showToast('充值失败: ' + e.message, 'error');
+            }
+        }
+
+        async function deductPoints(userId, username) {
+            const amountText = prompt(`请输入要扣除用户 ${username} 的积分`, '1');
+            if (amountText === null) return;
+            const amount = Number(amountText);
+            if (!Number.isFinite(amount) || amount <= 0) {
+                showToast('扣分数值必须大于 0', 'error');
+                return;
+            }
+
+            const note = prompt('请输入扣分备注（可选）', '') || '';
+            if (!await showConfirmModal(`确认扣除 ${username} ${Math.round(amount)} 积分吗？`, '扣分确认')) return;
+
+            try {
+                const res = await fetch('/api/admin/deduct-points', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId, amount: Math.round(amount), note })
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    showToast(data.error || '扣分失败', 'error');
+                    return;
+                }
+                const balance = data?.data?.balance ?? 0;
+                showToast(`✅ 扣分成功，剩余积分 ${balance}`);
+                loadUsers(currentPage);
+            } catch (e) {
+                showToast('扣分失败: ' + e.message, 'error');
+            }
+        }
+
         // 初始加载
+        loadSystemConfig();
         loadUsers(1);
     </script>
 </body>

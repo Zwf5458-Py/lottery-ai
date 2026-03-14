@@ -5,9 +5,171 @@
 """
 
 import pandas as pd
+import math
 from collections import Counter
 from modules.data_processor import load_data, clean_data, get_db_connection
-from modules.simulator import _build_markov_transition_weights, _build_color_markov_transition_weights, get_zodiac_mapping
+from modules.simulator import _build_markov_transition_weights, _build_color_markov_transition_weights
+from modules.constants import get_zodiac_mapping, get_color, RED_NUMS, BLUE_NUMS, GREEN_NUMS, ZODIAC_ORDER, NUM_TO_ZODIAC_IDX, ZODIAC_NUMS
+
+
+FIVE_ELEMENTS_MAP = {
+    '金': {6, 7, 20, 21, 28, 29, 36, 37, 44, 45},
+    '木': {1, 8, 9, 16, 17, 30, 31, 38, 39, 46, 47},
+    '水': {4, 5, 12, 13, 26, 27, 34, 35, 48, 49},
+    '火': {2, 3, 10, 11, 18, 19, 32, 33, 40, 41},
+    '土': {14, 15, 22, 23, 24, 25, 42, 43},
+}
+
+
+def _get_five_element(num: int) -> str:
+    for name, nums in FIVE_ELEMENTS_MAP.items():
+        if int(num) in nums:
+            return name
+    return '未知'
+
+
+def _normal_sf(z: float) -> float:
+    return 0.5 * math.erfc(z / math.sqrt(2.0))
+
+
+def _chi_square_p_value(chi2: float, dfree: int) -> float:
+    if dfree <= 0:
+        return 1.0
+    if chi2 <= 0:
+        return 1.0
+    # Wilson-Hilferty approximation
+    a = 2.0 / (9.0 * dfree)
+    z = ((chi2 / dfree) ** (1.0 / 3.0) - (1.0 - a)) / math.sqrt(a)
+    return max(0.0, min(1.0, _normal_sf(z)))
+
+
+def five_elements_analysis(df: pd.DataFrame = None, periods: int = 100) -> dict:
+    """五行监控面板：卡方偏差、状态关联、泊松遗漏极限。"""
+    if df is None:
+        df = clean_data(load_data())
+
+    if periods > 0:
+        df_recent = df.head(periods).copy()
+    else:
+        df_recent = df.copy()
+
+    recent_specials = [int(x) for x in df_recent['special_num'].tolist()]
+    full_specials = [int(x) for x in df['special_num'].tolist()]
+    recent_elements = [_get_five_element(n) for n in recent_specials]
+    full_elements = [_get_five_element(n) for n in full_specials]
+    total = len(recent_elements)
+
+    expected_probs = {k: len(v) / 49.0 for k, v in FIVE_ELEMENTS_MAP.items()}
+    counts = Counter(recent_elements)
+    chi_items = []
+    chi_square = 0.0
+    for name in FIVE_ELEMENTS_MAP.keys():
+        observed = counts.get(name, 0)
+        expected = total * expected_probs[name]
+        deviation = observed - expected
+        chi_square += ((deviation ** 2) / expected) if expected > 0 else 0.0
+        chi_items.append({
+            'element': name,
+            'observed': observed,
+            'expected': round(expected, 2),
+            'deviation': round(deviation, 2),
+            'ratio': round((observed / expected) if expected else 0, 3)
+        })
+    p_value = _chi_square_p_value(chi_square, 4)
+
+    transitions = Counter()
+    prev_counts = Counter()
+    for i in range(1, len(full_elements)):
+        prev_el = full_elements[i]
+        curr_el = full_elements[i - 1]
+        if prev_el == '未知' or curr_el == '未知':
+            continue
+        transitions[(prev_el, curr_el)] += 1
+        prev_counts[prev_el] += 1
+
+    ordered_elements = list(FIVE_ELEMENTS_MAP.keys())
+    association_rules = []
+    total_transitions = sum(transitions.values()) or 1
+    transition_matrix = []
+    for (prev_el, curr_el), cnt in transitions.items():
+        support = cnt / total_transitions
+        confidence = cnt / prev_counts[prev_el] if prev_counts[prev_el] else 0
+        lift = confidence / expected_probs.get(curr_el, 1)
+        association_rules.append({
+            'from': prev_el,
+            'to': curr_el,
+            'count': cnt,
+            'support': round(support * 100, 2),
+            'confidence': round(confidence * 100, 2),
+            'lift': round(lift, 2)
+        })
+    association_rules.sort(key=lambda x: (x['confidence'], x['support'], x['lift']), reverse=True)
+
+    for row_el in ordered_elements:
+        row_items = []
+        row_total = prev_counts.get(row_el, 0)
+        for col_el in ordered_elements:
+            cnt = transitions.get((row_el, col_el), 0)
+            confidence = (cnt / row_total * 100) if row_total else 0
+            row_items.append({
+                'to': col_el,
+                'count': cnt,
+                'confidence': round(confidence, 2)
+            })
+        transition_matrix.append({'from': row_el, 'items': row_items})
+
+    omission_stats = []
+    horizon = 10
+    for name in FIVE_ELEMENTS_MAP.keys():
+        lam = horizon * expected_probs[name]
+        current_gap = 0
+        for el in full_elements:
+            if el == name:
+                break
+            current_gap += 1
+        if lam > 0:
+            no_show_prob = math.exp(-lam)
+            cdf_gap = math.exp(-expected_probs[name] * current_gap)
+        else:
+            no_show_prob = 1.0
+            cdf_gap = 1.0
+        omission_stats.append({
+            'element': name,
+            'lambda_10': round(lam, 3),
+            'current_gap': current_gap,
+            'p0_next_10': round(no_show_prob * 100, 2),
+            'gap_tail_prob': round(cdf_gap * 100, 3),
+            'extreme': cdf_gap <= 0.01,
+            'hint': '⚠️ 接近均值回归拐点' if cdf_gap <= 0.01 else ('📈 值得关注' if cdf_gap <= 0.05 else '✅ 正常波动')
+        })
+    omission_stats.sort(key=lambda x: x['gap_tail_prob'])
+
+    number_balls = {
+        name: sorted(list(nums))
+        for name, nums in FIVE_ELEMENTS_MAP.items()
+    }
+
+    strongest = max(chi_items, key=lambda x: abs(x['deviation'])) if chi_items else None
+    return {
+        'periods': total,
+        'chi_square': {
+            'stat': round(chi_square, 3),
+            'p_value': round(p_value, 4),
+            'significant': p_value < 0.05,
+            'items': chi_items,
+            'headline': f"{strongest['element']}偏差最明显" if strongest else '样本不足'
+        },
+        'apriori': {
+            'rules': association_rules[:8],
+            'matrix': transition_matrix,
+            'headline': f"{association_rules[0]['from']}→{association_rules[0]['to']} 置信度最高" if association_rules else '样本不足'
+        },
+        'poisson': {
+            'items': omission_stats,
+            'headline': f"{omission_stats[0]['element']}遗漏最极端" if omission_stats else '样本不足'
+        },
+        'number_balls': number_balls
+    }
 
 
 def _get_all_numbers(df: pd.DataFrame) -> list:
@@ -61,23 +223,17 @@ def hot_cold_numbers(top_n: int = 10, df: pd.DataFrame = None, periods: int = 10
     freq = number_frequency(df, periods)
     sorted_nums = sorted(freq.items(), key=lambda x: x[1], reverse=True)
     
-    # 2. 计算所有号码的当前遗漏值 (基于全量数据，从最新一期往回数)
-    # 注意：遗漏值通常是基于全量历史来算的，或者至少要比 periods 长很多才能算准
+    # 2. 计算所有号码的当前遗漏值 (基于全量历史，确保捕捉到 139 期等真实的极致大冷号)
+    # 注意：热度统计（出现次数）依然严格遵循用户选定的 periods 期数。
     omission_dict = {}
+    
+    # 向量化计算：用 numpy 数组代替逐行 Python 循环 (O(N×49) -> O(N+49))
+    import numpy as np
+    df_sorted = df.sort_values(by=['draw_date', 'draw_number'], ascending=[False, False])
+    special_arr = df_sorted['special_num'].values.astype(int)
     for num in range(1, 50):
-        omission = 0
-        found = False
-        # 倒序遍历 (df 默认是从新到旧, 第0行是最新的)
-        # 假设 df 已经是按时间倒序排列 (最新的在最前)
-        # 如果不是，先 sort 一下
-        df_sorted = df.sort_values(by=['draw_date', 'draw_number'], ascending=[False, False])
-        
-        for _, row in df_sorted.iterrows():
-            if int(row['special_num']) == num:
-                found = True
-                break
-            omission += 1
-        omission_dict[num] = omission
+        indices = np.where(special_arr == num)[0]
+        omission_dict[num] = int(indices[0]) if len(indices) > 0 else len(special_arr)
         
     hot_list = []
     for n, c in sorted_nums[:top_n]:
@@ -223,14 +379,15 @@ def zodiac_momentum_analysis(df: pd.DataFrame, z_map: dict) -> dict:
     """
     生肖路单连涨连跌特征（动量拐点预测）
     根据最近图表中的连续向上或向下趋势，计算可能反向的概率权重。
+    引入 RLE 复杂多维跳变观测系统。
     """
     if df is None or df.empty:
         return {'current_trend': 'none', 'consecutive_count': 0, 'reversal_probability': 0}
     
-    # 按照前端图表：Y轴从下到上是 鼠, 牛, 虎, 兔, 龙, 蛇, 马, 羊, 猴, 鸡, 狗, 猪
     zodiac_order = ['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪']
     
-    recent_draws = df.head(30) # 取最近30期分析走势
+    # 扩大观测窗口至 150 期
+    recent_draws = df.head(150)
     
     y_values = []
     for _, row in recent_draws.iterrows():
@@ -256,64 +413,132 @@ def zodiac_momentum_analysis(df: pd.DataFrame, z_map: dict) -> dict:
         elif diff < 0: trends.append('down')
         else: trends.append('flat')
         
-    # 检测单跳交替规律 (up-down-up-down 这种)
-    # 从最新的趋势往回看
+    # 清理掉假波动(也就是连续两期生肖相同，y 轴停留在原地的干扰项)
+    trends = [t for t in trends if t != 'flat']
+    if not trends:
+        return {'current_trend': 'none', 'consecutive_count': 0, 'reversal_probability': 0}
+        
+    # 反转数组，最新的在最前面 index 0
     rev_trends = list(reversed(trends))
     
     current_trend = rev_trends[0]
     consecutive_count = 0
-    is_jumping = False
-    
-    # 首先检查是否是连续单跳交替 (例如: up, down, up, down)
-    if len(rev_trends) >= 3 and current_trend in ('up', 'down'):
-        jump_count = 1
-        expected_next = 'down' if rev_trends[0] == 'up' else 'up'
-        for t in rev_trends[1:]:
-            if t == expected_next:
-                jump_count += 1
-                expected_next = 'down' if expected_next == 'up' else 'up'
-            elif t == 'flat' and jump_count == 1:
-                # 忽略偶尔的 flat
-                pass
+    for t in rev_trends:
+        if t == current_trend:
+            consecutive_count += 1
+        else:
+            break
+            
+    # ------ 高级 RLE 模式识别开始 ------
+    def _analyze_zodiac_pattern(trends_arr):
+        if len(trends_arr) < 5: return 1.0, 1.0
+        
+        rle = []
+        curr_val = trends_arr[0]
+        count = 1
+        for i in range(1, len(trends_arr)):
+            val = trends_arr[i]
+            if val == curr_val:
+                count += 1
             else:
-                break
-        if jump_count >= 3:
-            is_jumping = True
-            consecutive_count = jump_count
-            current_trend = 'jump'
+                rle.append((curr_val, count))
+                curr_val = val
+                count = 1
+        rle.append((curr_val, count))
+
+        w_keep = 1.0
+        w_break = 1.0
+        c_count = rle[0][1]
+
+        # 规则A1：天花板限制 (近30次方向突变中寻找)
+        recent_streaks = [x[1] for x in rle[:30]]
+        if len(recent_streaks) >= 4:
+            max_streak = max(recent_streaks)
+            if c_count >= max_streak and max_streak <= 3:
+                 w_break *= (2.0 + c_count * 1.5)
+        
+        # 规则A2：均值回归防长龙
+        if c_count == 3:
+            w_break *= 2.5
+        elif c_count >= 4:
+            w_break *= (4.0 + (c_count - 4) * 2.0)
+
+        # 规则B：重复宏观模式匹配
+        if len(rle) >= 5:
+            pattern_counts = [x[1] for x in rle]
+            if len(pattern_counts) >= 4:
+                # 类似 1-2-1-2 震荡跟随
+                if pattern_counts[1] == pattern_counts[3] and pattern_counts[1] > 0:
+                    target_count = pattern_counts[2]
+                    if c_count < target_count:
+                        w_keep *= 2.5
+                    elif c_count == target_count:
+                        w_break *= 3.0
+                    elif c_count > target_count:
+                        w_break *= 1.5
+                        
+            # 单跳防跳跟随
+            if all(c == 1 for c in pattern_counts[1:5]):
+                if c_count == 1:
+                    w_keep *= 3.5 # 押注它连庄(防跳)
+                elif c_count >= 2:
+                    w_keep *= 1.2
+                    
+        return w_keep, w_break
+
+    # 这里的 w_keep_zodiac 代表"顺势", 即下期继续 current_trend
+    # w_break_zodiac 代表"逆势转向", 即下期相反方向
+    w_keep_zodiac, w_break_zodiac = _analyze_zodiac_pattern(rev_trends)
     
-    # 如果不是单跳，检查正常的连涨连跌
-    if not is_jumping:
-        for t in rev_trends:
-            if t == current_trend:
-                consecutive_count += 1
-            else:
-                break
+    total_w_z = w_keep_zodiac + w_break_zodiac
+    if total_w_z == 0: total_w_z = 1
+    rev_prob = (w_break_zodiac / total_w_z) * 100
+    
+    reversal_target = 'down' if current_trend == 'up' else 'up'
+    
+    # ====== 新增：波色模式提取与分析 ======
+    # 直接在同一个 150 期数据集中提取颜色跳动规律
+    color_seq = []
+    red_set = {1, 2, 7, 8, 12, 13, 18, 19, 23, 24, 29, 30, 34, 35, 40, 45, 46}
+    blue_set = {3, 4, 9, 10, 14, 15, 20, 25, 26, 31, 36, 37, 41, 42, 47, 48}
+    green_set = {5, 6, 11, 16, 17, 21, 22, 27, 28, 32, 33, 38, 39, 43, 44, 49}
+    
+    for _, row in recent_draws.iterrows():
+        try:
+            num = int(row['special_num'])
+            if num in red_set: color_seq.append('red')
+            elif num in blue_set: color_seq.append('blue')
+            elif num in green_set: color_seq.append('green')
+        except:
+            continue
+            
+    color_seq.reverse() # 变成最老在左边，最新在右边
+    rev_color_seq = list(reversed(color_seq)) # 最新的在 index 0
+    
+    color_boosts = {'red': 1.0, 'blue': 1.0, 'green': 1.0}
+    
+    if len(rev_color_seq) > 5:
+        w_keep_color, w_break_color = _analyze_zodiac_pattern(rev_color_seq)
+        current_color = rev_color_seq[0]
+        
+        # 将颜色动量转化为具体颜色的权重倍增器
+        color_boosts[current_color] *= w_keep_color
+        # 逆势转向（打断当前颜色连庄的权重，均分给其他两色）
+        break_boost = w_break_color / 2.0
+        for c in ['red', 'blue', 'green']:
+            if c != current_color:
+                color_boosts[c] *= break_boost
                 
-    # 确定反转目标
-    # 如果是涨，回调目标是 down；如果是跌，反弹目标是 up
-    # 如果是单跳(jump)，反转目标就是"打破当前的跳动，即连庄"，
-    # 比如最近是 down, up, down, up（最新一期是up），理论上下期该 down。
-    # 所以如果大模型"顺应反弹"(防跳)，那就是押注它【不跳了，继续 up】。
-    if current_trend == 'jump':
-        # rev_trends[0] 是最新的一步（例如最新一步是从低到高 up）
-        # 如果规律继续跳，下期该是 down。如果防跳（反转这个单跳规律），下期就该是 up。
-        reversal_target = rev_trends[0]
-    else:
-        reversal_target = 'down' if current_trend == 'up' else ('up' if current_trend == 'down' else 'none')
-    
-    # 反转概率：无论是连涨、连跌还是连跳，次数越多，被打破的概率越高
-    prob_map = {1: 45, 2: 65, 3: 80, 4: 92, 5: 98}
-    rev_prob = prob_map.get(consecutive_count, 99) if consecutive_count > 0 and current_trend != 'flat' else 0
-    
     return {
         'current_trend': current_trend,
         'consecutive_count': consecutive_count,
         'reversal_probability': rev_prob,
         'reversal_target_direction': reversal_target,
         'current_y': y_values[-1] if y_values else -1,
-        'last_step': rev_trends[0] if rev_trends else 'none', # 用于 jump 模式说明状态
-        'zodiac_order': zodiac_order
+        'last_step': current_trend,
+        'zodiac_order': zodiac_order,
+        # 新增输出给 simulator 用的波色权重修饰符
+        'color_momentum_boosts': color_boosts
     }
 
 
@@ -347,15 +572,13 @@ def tail_number_stats(df: pd.DataFrame = None, periods: int = 100) -> dict:
     for t in range(10):
         omission_dict[t] = 0
         
+    # 向量化计算：用 numpy 数组代替逐行 Python 循环
+    import numpy as np
     df_sorted = df.sort_values(by=['draw_date', 'draw_number'], ascending=[False, False])
-    
+    tail_arr = df_sorted['special_num'].values.astype(int) % 10
     for t in range(10):
-        omission = 0
-        for _, row in df_sorted.iterrows():
-            if int(row['special_num']) % 10 == t:
-                break
-            omission += 1
-        omission_dict[t] = omission
+        indices = np.where(tail_arr == t)[0]
+        omission_dict[t] = int(indices[0]) if len(indices) > 0 else len(tail_arr)
 
     # 结果封装
     distribution = {}
@@ -375,27 +598,8 @@ def zodiac_frequency(df: pd.DataFrame = None, periods: int = 200) -> dict:
     if df is None:
         df = clean_data(load_data())
         
-    zodiac_order = ["鼠", "牛", "虎", "兔", "龙", "蛇", "马", "羊", "猴", "鸡", "狗", "猪"]
-    
-    num_to_zodiac_idx = {}
-    zodiac_nums = {
-        "马": [1, 13, 25, 37, 49],
-        "蛇": [2, 14, 26, 38],
-        "龙": [3, 15, 27, 39],
-        "兔": [4, 16, 28, 40],
-        "虎": [5, 17, 29, 41],
-        "牛": [6, 18, 30, 42],
-        "鼠": [7, 19, 31, 43],
-        "猪": [8, 20, 32, 44],
-        "狗": [9, 21, 33, 45],
-        "鸡": [10, 22, 34, 46],
-        "猴": [11, 23, 35, 47],
-        "羊": [12, 24, 36, 48]
-    }
-    for zodiac_name, nums in zodiac_nums.items():
-        idx = zodiac_order.index(zodiac_name)
-        for n in nums:
-            num_to_zodiac_idx[n] = idx
+    zodiac_order = ZODIAC_ORDER
+    num_to_zodiac_idx = NUM_TO_ZODIAC_IDX
     
     df_recent = df.head(periods).iloc[::-1]
     
@@ -449,31 +653,29 @@ def bayesian_inference(df: pd.DataFrame, z_map: dict, periods: int = 100) -> lis
     counts = Counter(zodiac_list)
     
     # 计算当前遗漏和历史遗漏统计
-    # omission: 当前遗漏
+    # omission: 当前遗漏（从最新一期往回数，直到该生肖最近一次出现的行数）
     # history_omissions: 历史上每次出现的间隔期数列表
     omission = {}
     history_omissions = {z: [] for z in ['鼠','牛','虎','兔','龙','蛇','马','羊','猴','鸡','狗','猪']}
     
     for z in ['鼠','牛','虎','兔','龙','蛇','马','羊','猴','鸡','狗','猪']:
-        current_omi = 0
-        last_seen_idx = -1
+        last_seen_pos = -1  # 行位置计数器（不是 DataFrame index）
         
-        # 为了统计所有历史遗漏区间，遍历全表(或近N期)
-        # df 默认是从新到旧排序
-        for i, row in df.iterrows():
+        # df 默认是从新到旧排序，用 enumerate 确保取到的是行位置而非原始 index
+        for pos, (_, row) in enumerate(df.iterrows()):
             curr_z = z_map.get(int(row['special_num']), '未知')
             if curr_z == z:
-                if last_seen_idx == -1: # 这是最近一次出现
-                    omission[z] = i
+                if last_seen_pos == -1:  # 这是最近一次出现
+                    omission[z] = pos
                 else:
-                    # 距离上一次出现的间隔期数减1就是遗漏期数
-                    gap = i - last_seen_idx - 1
+                    # 距离上一次出现的间隔期数
+                    gap = pos - last_seen_pos - 1
                     if gap >= 0:
                         history_omissions[z].append(gap)
-                last_seen_idx = i
+                last_seen_pos = pos
                 
         # 如果循环结束都没有发现，当前遗漏就是全表长度
-        if last_seen_idx == -1:
+        if last_seen_pos == -1:
             omission[z] = len(df)
             
     # 计算推断后验概率权重
@@ -496,13 +698,17 @@ def bayesian_inference(df: pd.DataFrame, z_map: dict, periods: int = 100) -> lis
         boost_factor = (1 + approaching_ratio) ** 2.5 
         posterior_score = p_prior * boost_factor * 100
         
+        # 刷新历史记录判定
+        breaking_record = omi > max_omi
+        
         results.append({
             'zodiac': z,
             'prior': round(p_prior * 100, 1),
             'omission': omi,
             'max_omission': int(max_omi),
             'avg_omission': round(avg_omi, 1),
-            'posterior': round(posterior_score, 1)
+            'posterior': round(posterior_score, 1),
+            'breaking_record': breaking_record
         })
         
     # 按后验概率从高到低排序
@@ -664,19 +870,7 @@ def color_hot_cold_analysis(df: pd.DataFrame, periods: int = 100) -> dict:
     波色冷热极限推测：基于几何分布 (Geometric Distribution) 与遗漏分析。
     计算红、蓝、绿三色的出现频次、当前遗漏期数和几何分布反弹概率。
     """
-    red = {1, 2, 7, 8, 12, 13, 18, 19, 23, 24, 29, 30, 34, 35, 40, 45, 46}
-    blue = {3, 4, 9, 10, 14, 15, 20, 25, 26, 31, 36, 37, 41, 42, 47, 48}
-    green = {5, 6, 11, 16, 17, 21, 22, 27, 28, 32, 33, 38, 39, 43, 44, 49}
-
-    def get_color(num):
-        try:
-            n = int(num)
-            if n in red: return '红波'
-            if n in blue: return '蓝波'
-            if n in green: return '绿波'
-        except:
-            pass
-        return None
+    # 波色集合和 get_color 已通过顶部从 constants.py 导入
 
     # 截取指定期数
     subset = df.head(periods) if periods > 0 else df
@@ -761,14 +955,7 @@ def get_full_analysis(lottery_type: str = 'macaujc') -> dict:
     conn.close()
     
     # 红蓝绿波色判断
-    def get_color(num):
-        red = {1, 2, 7, 8, 12, 13, 18, 19, 23, 24, 29, 30, 34, 35, 40, 45, 46}
-        blue = {3, 4, 9, 10, 14, 15, 20, 25, 26, 31, 36, 37, 41, 42, 47, 48}
-        green = {5, 6, 11, 16, 17, 21, 22, 27, 28, 32, 33, 38, 39, 43, 44, 49}
-        if num in red: return "红波"
-        if num in blue: return "蓝波"
-        if num in green: return "绿波"
-        return "未知"
+    # get_color 已通过顶部从 constants.py 导入
     
     # 找出最新一期的生肖和数字作为雷达图的中心点展示依据
     latest_zodiac = "未知"
@@ -799,6 +986,7 @@ def get_full_analysis(lottery_type: str = 'macaujc') -> dict:
             'weights': markov_weights,
             'color_weights': color_weights
         },
+        'five_elements': five_elements_analysis(df, periods.get('hot_cold', 100)),
         'bayesian': bayesian_inference(df, z_map, periods.get('bayesian', 100)),
         'lstm': lstm_simulation(df, z_map, periods.get('lstm', 100)),
         'color_hot_cold': color_hot_cold_analysis(df, periods.get('hot_cold', 100)),

@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 模型运维中心</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=4">
+    <style>
+        body { background: linear-gradient(135deg, #0f172a, #111827 55%, #1e293b); color:#e5e7eb; }
+        .ops-wrap { max-width: 1260px; margin: 24px auto 40px; padding: 0 16px; }
+        .ops-head { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; margin-bottom:18px; }
+        .ops-head h1 { font-size: 1.35rem; font-weight: 900; color:#f8fafc; }
+        .ops-sub { color:#94a3b8; margin-top:6px; line-height:1.6; }
+        .back-links { display:flex; gap:10px; flex-wrap:wrap; }
+        .back-link { display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border-radius:999px; border:1px solid rgba(148,163,184,.28); text-decoration:none; color:#e2e8f0; }
+        .ops-layout { display:grid; grid-template-columns: 1.05fr 0.95fr; gap:18px; }
+        .ops-card { padding:20px; border-radius:18px; border:1px solid rgba(148,163,184,.14); background:rgba(15,23,42,.56); box-shadow:0 16px 30px rgba(0,0,0,.18); }
+        .ops-title { font-size:1.02rem; font-weight:800; color:#f8fafc; margin-bottom:10px; }
+        .ops-help { font-size:.82rem; color:#94a3b8; line-height:1.6; margin-bottom:14px; }
+        .config-grid { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:14px; }
+        .config-item { display:flex; flex-direction:column; gap:8px; }
+        .config-item label { font-size:.82rem; color:#cbd5e1; font-weight:700; }
+        .config-item input { padding:10px 12px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:10px; color:#fff; outline:none; }
+        .toolbar { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+        .group { display:flex; flex-wrap:wrap; gap:10px; padding:10px; border-radius:14px; background:rgba(15,23,42,.36); border:1px solid rgba(148,163,184,.1); }
+        .btn-primary, .btn-secondary { padding:9px 14px; border-radius:10px; font-weight:700; cursor:pointer; }
+        .btn-primary { border:none; color:#fff; background:linear-gradient(135deg,#0f766e,#0ea5a4); }
+        .btn-secondary { border:1px solid rgba(148,163,184,.3); background:rgba(30,41,59,.7); color:#e2e8f0; }
+        .btn-accent { padding:9px 14px; border:none; border-radius:10px; font-weight:800; cursor:pointer; color:#082f49; background:linear-gradient(135deg,#facc15,#f59e0b); }
+        .diag-grid { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:12px; margin-top:14px; }
+        .diag-card, .info-card { padding:14px; border-radius:14px; background:rgba(15,23,42,.42); border:1px solid rgba(148,163,184,.14); }
+        .diag-light { width:12px; height:12px; border-radius:50%; display:inline-block; margin-right:8px; box-shadow:0 0 14px currentColor; }
+        .diag-green { color:#4ade80; background:#4ade80; }
+        .diag-yellow { color:#facc15; background:#facc15; }
+        .diag-red { color:#f87171; background:#f87171; }
+        .info-grid { display:grid; grid-template-columns: 1fr; gap:12px; }
+        .kv-list { display:grid; gap:8px; }
+        .kv-row { display:flex; justify-content:space-between; gap:12px; font-size:.84rem; color:#cbd5e1; border-bottom:1px dashed rgba(148,163,184,.12); padding-bottom:6px; }
+        .kv-row span:first-child { color:#94a3b8; white-space:nowrap; }
+        .kv-row code { color:#f8fafc; word-break:break-all; }
+        .result-box { margin-top:12px; padding:12px; border-radius:12px; background:rgba(15,23,42,.42); border:1px solid rgba(148,163,184,.12); color:#cbd5e1; font-size:.84rem; line-height:1.6; }
+        .simple-line { margin-top:8px; }
+        .attempt-list { display:grid; gap:8px; margin-top:8px; }
+        .attempt-item { padding:10px 12px; border-radius:10px; background:rgba(30,41,59,.72); border:1px solid rgba(148,163,184,.12); }
+        @media (max-width: 1100px) { .ops-layout { grid-template-columns: 1fr; } }
+        @media (max-width: 680px) {
+            .ops-head { flex-direction:column; }
+            .config-grid, .diag-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+
+    <!-- CSRF Token Global Setup -->
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <script>
+        const originalFetch = window.fetch;
+        window.fetch = async function(resource, config) {
+            config = config || {};
+            const method = (config.method || 'GET').toUpperCase();
+            if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+                config.headers = {
+                    ...config.headers,
+                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content
+                };
+            }
+            return originalFetch(resource, config);
+        };
+    </script>
+</head>
+<body>
+    <div class="ops-wrap">
+        <div class="ops-head">
+            <div>
+                <h1>🧠 AI 模型运维中心</h1>
+                <div class="ops-sub">集中处理平台模型配置、连通性测试、Docker 探活、自动诊断、自动修复与故障追踪。</div>
+            </div>
+            <div class="back-links">
+                <a href="/admin" class="back-link">⬅ 返回后台</a>
+                <a href="/health" class="back-link">🩺 健康页</a>
+            </div>
+        </div>
+
+        <div class="ops-layout">
+            <div class="ops-card">
+                <div class="ops-title">平台模型配置</div>
+                <div class="ops-help">编辑平台管理员共享的 AI 平台/模型/API Base/API Key，保存后普通用户会继承平台模型配置。</div>
+
+                <div class="config-grid">
+                    <div class="config-item"><label for="ai-platform">平台</label><input id="ai-platform" type="text" placeholder="local"></div>
+                    <div class="config-item"><label for="ai-model">模型</label><input id="ai-model" type="text" placeholder="gpt-5.4"></div>
+                    <div class="config-item"><label for="ai-api-base">API Base</label><input id="ai-api-base" type="text" placeholder="http://192.168.1.101:8317/v1"></div>
+                    <div class="config-item"><label for="ai-api-key">API Key</label><input id="ai-api-key" type="text" placeholder="sk-***"></div>
+                </div>
+
+                <div class="toolbar">
+                    <div class="group">
+                        <button class="btn-primary" onclick="saveAIConfig()">💾 保存平台配置</button>
+                        <button class="btn-secondary" onclick="applyAIPreset('local')">🏠 本地 8317</button>
+                        <button class="btn-secondary" onclick="applyAIPreset('docker')">🐳 Docker 宿主</button>
+                        <button class="btn-secondary" onclick="applyAIPreset('lan')">📡 当前局域网 IP</button>
+                    </div>
+                    <div class="group">
+                        <button class="btn-primary" onclick="loadAIConfigView()">🔄 刷新配置</button>
+                        <button class="btn-secondary" onclick="applyCurrentBaseAsDefault()">✅ 当前地址设为默认</button>
+                        <button class="btn-primary" onclick="autoFixAIConfig()">🛠️ 一键自动修复</button>
+                        <button class="btn-accent" onclick="testAndAutoFixAIConfig()">🚀 容器实测并自动修复</button>
+                    </div>
+                </div>
+
+                <div class="toolbar">
+                    <div class="group">
+                        <button class="btn-secondary" onclick="testAIConfigConnection()">🧪 本机测试</button>
+                        <button class="btn-secondary" onclick="testDockerAIConnection()">🐳 容器内测试</button>
+                        <button class="btn-secondary" onclick="loadDockerEnvSnapshot()">📦 容器环境快照</button>
+                        <button class="btn-secondary" onclick="compareAIConfigConsistency()">🧩 比较一致性</button>
+                    </div>
+                    <div class="group">
+                        <button class="btn-primary" onclick="runAIDiagnostics()">🚦 一键自动诊断</button>
+                        <button class="btn-secondary" onclick="exportAIDiagnosis()">📤 导出诊断报告</button>
+                        <button class="btn-secondary" onclick="loadRecentAIFailures()">📜 最近10次 AI 故障</button>
+                    </div>
+                </div>
+
+                <div id="ai-config-test-result" class="result-box"></div>
+                <div id="ai-config-docker-result" class="result-box"></div>
+                <div id="ai-config-docker-env" class="result-box"></div>
+                <div id="ai-config-compare-result" class="result-box"></div>
+                <div id="ai-diagnostics-summary" class="result-box"></div>
+                <div id="ai-integrated-fix-result" class="result-box"></div>
+                <div id="ai-failures-panel" class="result-box"></div>
+
+                <div class="ops-title" style="margin-top:18px;">用户继承链路</div>
+                <div class="ops-help">输入用户 ID，查看该用户最终继承的是用户自己的配置、平台管理员配置还是环境/全局默认配置。</div>
+                <div class="toolbar" style="margin-top:0;">
+                    <input id="ai-effective-user-id" type="number" min="1" placeholder="输入用户ID查看继承配置" style="padding:10px 12px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:10px; color:#fff; outline:none; min-width:260px;">
+                    <button class="btn-secondary" onclick="loadEffectiveUserAIConfig()">👤 查看用户最终继承配置</button>
+                </div>
+                <div id="ai-effective-user-result" class="result-box"></div>
+            </div>
+
+            <div class="ops-card">
+                <div class="ops-title">运行状态总览</div>
+                <div class="ops-help">右侧汇总平台管理员配置、环境变量、生效配置和自动诊断状态灯，便于运维快速定位问题。</div>
+
+                <div class="info-grid" id="ai-config-grid">
+                    <div class="info-card">加载中...</div>
+                </div>
+
+                <div class="diag-grid" id="ai-diagnostics-panel"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toast(msg) { console.log(msg); }
+
+        function renderAIConfigCard(title, data = {}) {
+            const rows = Object.entries(data).map(([key, value]) => {
+                const showValue = typeof value === 'object' ? JSON.stringify(value) : String(value || '—');
+                return `<div class="kv-row"><span>${key}</span><code>${showValue}</code></div>`;
+            }).join('');
+            return `<div class="info-card"><div class="ops-title" style="font-size:.95rem; margin-bottom:10px;">${title}</div><div class="kv-list">${rows || '<div class="ops-help">暂无数据</div>'}</div></div>`;
+        }
+
+        function renderDiagCard(title, item = {}) {
+            const cls = item.status === 'green' ? 'diag-green' : (item.status === 'yellow' ? 'diag-yellow' : 'diag-red');
+            return `<div class="diag-card"><div style="font-size:.92rem; font-weight:800; color:#f8fafc; margin-bottom:8px;"><span class="diag-light ${cls}"></span>${title}</div><div style="font-size:.82rem; color:#cbd5e1; line-height:1.6;">${item.message || '—'}</div></div>`;
+        }
+
+        function escapeHtml(value) {
+            return String(value || '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+        }
+
+        function renderAttemptList(attempts = []) {
+            if (!attempts.length) return '<div class="simple-line">未记录容器探测尝试</div>';
+            return `<div class="attempt-list">${attempts.map((item, index) => {
+                const status = item.success ? '成功' : '失败';
+                const extra = item.error || item.detail || '已连接';
+                return `<div class="attempt-item">#${index + 1} ｜ <code>${escapeHtml(item.base || '-')}</code><div class="simple-line">结果：${status}</div><div class="simple-line">详情：${escapeHtml(extra)}</div></div>`;
+            }).join('')}</div>`;
+        }
+
+        async function loadAIConfigView() {
+            const grid = document.getElementById('ai-config-grid');
+            try {
+                const res = await fetch('/api/admin/ai-config');
+                const data = await res.json();
+                if (!data.success) {
+                    grid.innerHTML = '<div class="info-card">加载失败</div>';
+                    return;
+                }
+                const payload = data.data || {};
+                const ownerAI = payload.platform_owner_ai || {};
+                document.getElementById('ai-platform').value = ownerAI.platform || payload.effective?.platform || 'local';
+                document.getElementById('ai-model').value = ownerAI.model || payload.effective?.model || 'gpt-5.4';
+                document.getElementById('ai-api-base').value = ownerAI.api_base || payload.effective?.api_base || '';
+                document.getElementById('ai-api-key').value = ownerAI.api_key || '';
+                grid.innerHTML = [
+                    renderAIConfigCard('当前生效配置', payload.effective || {}),
+                    renderAIConfigCard('平台管理员', payload.platform_owner || {}),
+                    renderAIConfigCard('平台管理员 AI 配置', payload.platform_owner_ai || {}),
+                    renderAIConfigCard('全局默认 AI 配置', payload.global_ai || {}),
+                    renderAIConfigCard('环境变量', payload.env || {}),
+                ].join('');
+            } catch (e) {
+                grid.innerHTML = `<div class="info-card">加载失败: ${e.message}</div>`;
+            }
+        }
+
+        function applyAIPreset(type) {
+            const baseEl = document.getElementById('ai-api-base');
+            const platformEl = document.getElementById('ai-platform');
+            if (!baseEl || !platformEl) return;
+            platformEl.value = 'local';
+            if (type === 'local') baseEl.value = 'http://127.0.0.1:8317/v1';
+            if (type === 'docker') baseEl.value = 'http://host.docker.internal:8317/v1';
+            if (type === 'lan') baseEl.value = 'http://192.168.1.101:8317/v1';
+        }
+
+        async function saveAIConfig() {
+            const payload = {
+                platform: document.getElementById('ai-platform').value.trim() || 'local',
+                model: document.getElementById('ai-model').value.trim() || 'gpt-5.4',
+                api_base: document.getElementById('ai-api-base').value.trim(),
+                api_key: document.getElementById('ai-api-key').value.trim(),
+            };
+            const box = document.getElementById('ai-config-test-result');
+            try {
+                const res = await fetch('/api/admin/ai-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const data = await res.json();
+                box.textContent = data.success ? '✅ 平台模型配置已保存' : (data.error || '保存失败');
+                if (data.success) loadAIConfigView();
+            } catch (e) {
+                box.textContent = '保存失败: ' + e.message;
+            }
+        }
+
+        async function testAIConfigConnection() {
+            const box = document.getElementById('ai-config-test-result');
+            box.textContent = '正在测试本机连通性...';
+            const res = await fetch('/api/admin/ai-config/test', { method: 'POST' });
+            const data = await res.json();
+            box.innerHTML = data.success ? `✅ 本机连通成功 ｜ URL: <code>${data?.data?.url || '-'}</code>` : `❌ 本机连通失败 ｜ ${data?.data?.detail || data.error || '未知错误'}`;
+        }
+
+        async function testDockerAIConnection() {
+            const box = document.getElementById('ai-config-docker-result');
+            box.textContent = '正在测试容器内连通性...';
+            const res = await fetch('/api/admin/ai-config/test-docker', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ container: 'macau-mark-six' }) });
+            const data = await res.json();
+            const attempts = data?.data?.attempts || [];
+            box.innerHTML = data.success
+                ? `✅ 容器连通成功 ｜ URL: <code>${data?.data?.url || '-'}</code>${renderAttemptList(attempts)}`
+                : `❌ 容器连通失败 ｜ ${data?.data?.detail || data?.data?.stderr || data?.data?.error || data.error || '未知错误'}${renderAttemptList(attempts)}`;
+        }
+
+        async function loadDockerEnvSnapshot() {
+            const box = document.getElementById('ai-config-docker-env');
+            box.textContent = '正在读取容器环境快照...';
+            const res = await fetch('/api/admin/ai-config/docker-env?container=macau-mark-six');
+            const data = await res.json();
+            box.innerHTML = data.success ? `LOCAL_AI_BASE: <code>${data.data.LOCAL_AI_BASE || '-'}</code><div class="simple-line">HOST_GATEWAY_URL: <code>${data.data.HOST_GATEWAY_URL || '-'}</code></div><div class="simple-line">LOCAL_AI_API_KEY: <code>${data.data.LOCAL_AI_API_KEY_SET ? '已设置' : '未设置'}</code></div>` : (data.error || '读取失败');
+        }
+
+        async function compareAIConfigConsistency() {
+            const box = document.getElementById('ai-config-compare-result');
+            box.textContent = '正在比较配置一致性...';
+            const res = await fetch('/api/admin/ai-config/compare');
+            const data = await res.json();
+            box.innerHTML = data.success ? `最终生效地址：<code>${data.data.effective_base || '-'}</code><div class="simple-line">平台管理员：<code>${data.data.owner_base || '-'}</code></div><div class="simple-line">Docker：<code>${data.data.docker_base || '-'}</code></div><div class="simple-line">一致性：<code>${data.data.base_consistent ? '一致' : '不一致'}</code></div>` : (data.error || '比较失败');
+        }
+
+        async function applyCurrentBaseAsDefault() {
+            const apiBase = document.getElementById('ai-api-base').value.trim();
+            const box = document.getElementById('ai-config-test-result');
+            const res = await fetch('/api/admin/ai-config/apply-tested-base', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ api_base: apiBase }) });
+            const data = await res.json();
+            box.textContent = data.success ? '✅ 已写入平台默认地址' : (data.error || '写入失败');
+            if (data.success) loadAIConfigView();
+        }
+
+        async function runAIDiagnostics() {
+            const panel = document.getElementById('ai-diagnostics-panel');
+            const summary = document.getElementById('ai-diagnostics-summary');
+            panel.innerHTML = '<div class="diag-card">正在执行 AI 自动诊断...</div>';
+            const res = await fetch('/api/admin/ai-config/diagnose');
+            const data = await res.json();
+            if (!data.success) {
+                panel.innerHTML = '<div class="diag-card">诊断失败</div>';
+                summary.textContent = data.error || '未知错误';
+                return;
+            }
+            const statuses = data.data.statuses || {};
+            panel.innerHTML = [
+                renderDiagCard('当前生效配置', statuses.effective_config || {}),
+                renderDiagCard('本机连通性', statuses.direct_probe || {}),
+                renderDiagCard('容器连通性', statuses.docker_probe || {}),
+                renderDiagCard('配置一致性', statuses.consistency || {}),
+                renderDiagCard('容器环境快照', statuses.env_snapshot || {}),
+            ].join('');
+            const autofix = data.data.autofix_preview || {};
+            summary.innerHTML = `推荐地址：<code>${data.data.recommended_base || '-'}</code> ｜ 原因：${data.data.recommendation_reason || '—'}<div class="simple-line">自动修复预览：<code>${autofix.can_apply ? '可应用' : '不可应用'}</code> ｜ 来源：<code>${autofix.source || '-'}</code> ｜ 将变更：<code>${autofix.will_change ? '是' : '否'}</code></div>${renderAttemptList(data.data.docker_probe_attempts || [])}`;
+            if (data.data.recommended_base) document.getElementById('ai-api-base').value = data.data.recommended_base;
+        }
+
+        async function autoFixAIConfig() {
+            const box = document.getElementById('ai-config-test-result');
+            const res = await fetch('/api/admin/ai-config/auto-fix', { method: 'POST' });
+            const data = await res.json();
+            box.textContent = data.success ? '✅ 已按自动诊断结果修复平台默认地址' : (data.error || '自动修复失败');
+            if (data.success) {
+                loadAIConfigView();
+                runAIDiagnostics();
+            }
+        }
+
+        async function testAndAutoFixAIConfig() {
+            const box = document.getElementById('ai-integrated-fix-result');
+            box.textContent = '正在执行容器内实测，并准备自动修复平台默认地址...';
+            try {
+                const res = await fetch('/api/admin/ai-config/test-and-auto-fix', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ container: 'macau-mark-six' })
+                });
+                const data = await res.json();
+                const attempts = data?.data?.docker_probe?.attempts || [];
+                if (!data.success) {
+                    box.innerHTML = `❌ 集成流程失败 ｜ ${data.error || '未知错误'}${renderAttemptList(attempts)}`;
+                    return;
+                }
+                box.innerHTML = `✅ 容器实测完成并已自动修复<div class="simple-line">修复前：<code>${data?.data?.previous_base || '-'}</code></div><div class="simple-line">修复后：<code>${data?.data?.applied_base || '-'}</code></div>${renderAttemptList(attempts)}`;
+                if (data?.data?.applied_base) document.getElementById('ai-api-base').value = data.data.applied_base;
+                loadAIConfigView();
+                runAIDiagnostics();
+            } catch (e) {
+                box.textContent = '执行失败: ' + e.message;
+            }
+        }
+
+        async function exportAIDiagnosis() {
+            const res = await fetch('/api/admin/ai-config/export-diagnosis');
+            const data = await res.json();
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'ai-diagnosis-report.json';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        async function loadRecentAIFailures() {
+            const box = document.getElementById('ai-failures-panel');
+            box.textContent = '正在读取最近 AI 故障日志...';
+            const res = await fetch('/api/admin/ai-config/recent-failures');
+            const data = await res.json();
+            const items = data?.data?.items || [];
+            box.innerHTML = items.length ? items.map(i => `<div class="simple-line"><code>${i}</code></div>`).join('') : '最近没有检测到 AI 故障日志';
+        }
+
+        async function loadEffectiveUserAIConfig() {
+            const userId = Number(document.getElementById('ai-effective-user-id').value || 0);
+            const box = document.getElementById('ai-effective-user-result');
+            if (!userId) { box.textContent = '请输入用户 ID'; return; }
+            box.textContent = '正在查询用户最终继承配置...';
+            const res = await fetch(`/api/admin/ai-config/effective-user?user_id=${userId}`);
+            const data = await res.json();
+            box.innerHTML = data.success ? `用户配置：<code>${JSON.stringify(data.data.user_ai || {})}</code><div class="simple-line">最终生效：<code>${JSON.stringify(data.data.effective || {})}</code></div>` : (data.error || '查询失败');
+        }
+
+        loadAIConfigView();
+        runAIDiagnostics();
+    </script>
+</body>
+</html>

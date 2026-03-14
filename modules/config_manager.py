@@ -6,13 +6,15 @@
 
 import json
 import os
+import sqlite3
 
 CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+PLATFORM_OWNER_USERNAME = os.environ.get('PLATFORM_OWNER_USERNAME', 'zwf5458')
 
 DEFAULT_CONFIG = {
     "ai": {
-        "platform": "google",
-        "model": "gemini-2.5-pro",
+        "platform": "local",
+        "model": "gpt-5.4",
         "api_key": ""
     },
     "chart_periods": {
@@ -25,6 +27,16 @@ DEFAULT_CONFIG = {
         "bayesian": 100,
         "lstm": 100,
         "ai_raw_data": 300
+    },
+    "system": {
+        "signup_bonus_points": 20,
+        "ai_sim_cost": 5,
+        "settings_change_cost": 1,
+        "share_reward_points": 10,
+        "share_reward_ratio": 0.2,
+        "share_recharge_min": 5,
+        "points_per_yuan": 10,
+        "vip_monthly_fee": 99
     }
 }
 
@@ -78,6 +90,30 @@ def save_config(data: dict, user_id=None) -> bool:
         return False
 
 
+def load_global_config() -> dict:
+    """读取全局配置（不走用户会话）"""
+    try:
+        if os.path.exists(CONFIG_PATH):
+            with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+                cfg = json.load(f)
+            return _deep_merge(DEFAULT_CONFIG, cfg)
+    except Exception:
+        pass
+    return DEFAULT_CONFIG.copy()
+
+
+def save_global_config(data: dict) -> bool:
+    """保存全局配置（不走用户会话）"""
+    try:
+        current = load_global_config()
+        merged = _deep_merge(current, data)
+        with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+            json.dump(merged, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception:
+        return False
+
+
 def get_ai_config(user_id=None) -> dict:
     """获取 AI 模型配置"""
     return load_config(user_id).get('ai', DEFAULT_CONFIG['ai'])
@@ -86,6 +122,54 @@ def get_ai_config(user_id=None) -> dict:
 def get_chart_periods(user_id=None) -> dict:
     """获取各图表统计期数"""
     return load_config(user_id).get('chart_periods', DEFAULT_CONFIG['chart_periods'])
+
+
+def get_system_config() -> dict:
+    """获取系统级配置（积分、费用等）"""
+    return load_global_config().get('system', DEFAULT_CONFIG['system'])
+
+
+def get_platform_owner_ai_config() -> dict:
+    """获取平台管理员共享的 AI 配置（平台/模型/API 基础配置）。"""
+    try:
+        from modules.auth import USERS_DB_PATH, get_user_db_connection
+
+        conn = sqlite3.connect(USERS_DB_PATH)
+        row = conn.execute(
+            "SELECT id FROM users WHERE username=? LIMIT 1",
+            (PLATFORM_OWNER_USERNAME,)
+        ).fetchone()
+        conn.close()
+        if not row:
+            return {}
+
+        user_conn = get_user_db_connection(int(row[0]))
+        setting = user_conn.execute("SELECT value FROM user_settings WHERE key='ai'").fetchone()
+        user_conn.close()
+        if not setting:
+            return {}
+
+        data = json.loads(setting[0])
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def get_platform_owner_identity() -> dict:
+    """获取平台管理员身份信息。"""
+    try:
+        from modules.auth import USERS_DB_PATH
+        conn = sqlite3.connect(USERS_DB_PATH)
+        row = conn.execute(
+            "SELECT id, username, role FROM users WHERE username=? LIMIT 1",
+            (PLATFORM_OWNER_USERNAME,)
+        ).fetchone()
+        conn.close()
+        if not row:
+            return {}
+        return {'id': int(row[0]), 'username': row[1], 'role': row[2]}
+    except Exception:
+        return {}
 
 
 # ==================== 用户独立数据库配置读写 ====================
@@ -104,7 +188,11 @@ def _load_user_config(user_id: int) -> dict:
         config = DEFAULT_CONFIG.copy()
         for r in rows:
             try:
-                config[r[0]] = json.loads(r[1])
+                loaded = json.loads(r[1])
+                if isinstance(config.get(r[0]), dict) and isinstance(loaded, dict):
+                    config[r[0]] = _deep_merge(config[r[0]], loaded)
+                else:
+                    config[r[0]] = loaded
             except Exception:
                 config[r[0]] = r[1]
         return config

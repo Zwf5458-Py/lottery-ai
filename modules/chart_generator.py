@@ -7,19 +7,7 @@ import numpy as np
 plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'Arial Unicode MS']
 plt.rcParams['axes.unicode_minus'] = False
 
-def get_color_by_number(num):
-    """根据数字返回对于波色的 hex 颜色"""
-    try:
-        n = int(num)
-        red = {1, 2, 7, 8, 12, 13, 18, 19, 23, 24, 29, 30, 34, 35, 40, 45, 46}
-        blue = {3, 4, 9, 10, 14, 15, 20, 25, 26, 31, 36, 37, 41, 42, 47, 48}
-        green = {5, 6, 11, 16, 17, 21, 22, 27, 28, 32, 33, 38, 39, 43, 44, 49}
-        if n in red: return '#ef4444'
-        if n in blue: return '#3b82f6'
-        if n in green: return '#22c55e'
-    except:
-        pass
-    return '#eab308'  # 默认土黄
+from modules.constants import get_color_hex as get_color_by_number
 
 def generate_zodiac_trend_image_bytes(df: pd.DataFrame, z_map: dict, periods: int = 100) -> bytes:
     if df is None or df.empty: return None

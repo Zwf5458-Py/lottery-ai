@@ -11,11 +11,246 @@
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap"
         rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script>
         // 从后端注入当前用户信息，使用字符串再 Parse 避免编辑器语法报错
         window.__USER__ = JSON.parse('{{ user | tojson | safe if user else "{}" }}');
     </script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=7">
+    <style>
+        .history-tab-btn {
+            padding: 8px 16px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: rgba(30, 41, 59, 0.6);
+            color: #9ca3af;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .history-tab-btn:hover {
+            background: rgba(55, 65, 81, 0.8);
+            color: #e5e7eb;
+        }
+
+        .history-tab-btn.active {
+            background: linear-gradient(135deg, #7c3aed, #6d28d9);
+            color: #fff;
+            border-color: rgba(124, 58, 237, 0.5);
+        }
+
+        .ref-board {
+            margin-top: 10px;
+            max-height: 340px;
+            overflow: auto;
+            padding-right: 4px;
+            font-size: 0.76rem;
+            line-height: 1.7;
+            color: #cbd5e1;
+        }
+
+        .ref-section {
+            padding: 8px 10px;
+            border-radius: 10px;
+            background: rgba(15, 23, 42, 0.45);
+            border: 1px solid rgba(148, 163, 184, 0.16);
+            margin-bottom: 8px;
+        }
+
+        .ref-title {
+            color: #f8fafc;
+            font-weight: 800;
+            margin-bottom: 6px;
+        }
+
+        .ref-row {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            margin-bottom: 6px;
+            flex-wrap: wrap;
+        }
+
+        .ref-label {
+            min-width: 72px;
+            font-weight: 700;
+            color: #e2e8f0;
+        }
+
+        .ref-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            flex: 1;
+        }
+
+        .ref-chip {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 30px;
+            padding: 3px 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            background: rgba(30, 41, 59, 0.8);
+            color: #e2e8f0;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+        }
+
+        .ref-chip:hover {
+            transform: translateY(-1px);
+            border-color: rgba(196, 181, 253, 0.45);
+        }
+
+        .ref-chip.active {
+            box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.5), 0 0 16px rgba(250, 204, 21, 0.18);
+            border-color: rgba(250, 204, 21, 0.65);
+            background: rgba(113, 63, 18, 0.75);
+            color: #fde68a;
+        }
+
+        .ref-chip.red {
+            background: rgba(127, 29, 29, 0.72);
+            color: #fecdd3;
+            border-color: rgba(248, 113, 113, 0.28);
+        }
+
+        .ref-chip.blue {
+            background: rgba(30, 58, 138, 0.72);
+            color: #bfdbfe;
+            border-color: rgba(96, 165, 250, 0.28);
+        }
+
+        .ref-chip.green {
+            background: rgba(20, 83, 45, 0.72);
+            color: #bbf7d0;
+            border-color: rgba(74, 222, 128, 0.28);
+        }
+
+        .ref-status {
+            margin-bottom: 8px;
+            padding: 6px 10px;
+            border-radius: 8px;
+            background: rgba(124, 58, 237, 0.12);
+            color: #ddd6fe;
+            border: 1px solid rgba(124, 58, 237, 0.2);
+        }
+
+        .ref-toggle {
+            margin-top: 10px;
+            width: 100%;
+        }
+
+        .ref-toggle summary {
+            list-style: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 12px;
+            border-radius: 999px;
+            background: rgba(124, 58, 237, 0.16);
+            border: 1px solid rgba(124, 58, 237, 0.3);
+            color: #ddd6fe;
+            font-size: 0.78rem;
+            font-weight: 700;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .ref-toggle summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .ref-toggle summary::before {
+            content: '▶';
+            font-size: 0.72rem;
+            transition: transform 0.18s ease;
+        }
+
+        .ref-toggle[open] summary::before {
+            transform: rotate(90deg);
+        }
+
+        .ref-inline-btn {
+            margin-top: 0;
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            width: 72px;
+            height: 54px;
+            padding: 4px;
+            border: 1px solid rgba(124, 58, 237, 0.35);
+            border-radius: 12px;
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.28), rgba(91, 33, 182, 0.26));
+            color: #f5f3ff;
+            font-size: 0.74rem;
+            line-height: 1.1;
+            font-weight: 800;
+            cursor: pointer;
+            box-shadow: 0 10px 20px rgba(76, 29, 149, 0.18);
+        }
+
+        .ref-inline-panel {
+            display: none;
+            margin-top: 10px;
+        }
+
+        .stat-row-inline {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            width: 100%;
+        }
+
+        @media (max-width: 768px) {
+            .stat-row-inline {
+                align-items: flex-end;
+            }
+
+            .ref-inline-btn {
+                width: 62px;
+                height: 50px;
+                font-size: 0.7rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .stat-row-inline {
+                flex-direction: row;
+                gap: 8px;
+            }
+
+            .ref-inline-btn {
+                width: 58px;
+                height: 46px;
+                font-size: 0.66rem;
+            }
+        }
+    </style>
+
+    <!-- CSRF Token Global Setup -->
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <script>
+        const originalFetch = window.fetch;
+        window.fetch = async function(resource, config) {
+            config = config || {};
+            const method = (config.method || 'GET').toUpperCase();
+            if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+                config.headers = {
+                    ...config.headers,
+                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content
+                };
+            }
+            return originalFetch(resource, config);
+        };
+    </script>
 </head>
 
 <body>
@@ -42,9 +277,7 @@
             <div class="nav-tabs">
                 <button class="nav-tab active" data-tab="statistics" id="tab-stats">📊 统计分析</button>
                 <button class="nav-tab" data-tab="simulator" id="tab-sim">🎲 智能模拟</button>
-                <button class="nav-tab" data-tab="history" id="tab-history">📋 历史记录</button>
-                <button class="nav-tab" data-tab="ai-history" id="tab-ai-history" style="color: #c084fc;">📂 AI
-                    历史档案</button>
+                <button class="nav-tab active" data-tab="history" id="tab-history">📋 历史记录</button>
             </div>
             <button class="settings-btn" id="btn-open-settings" title="系统设置">⚙️</button>
             <!-- 用户身份栏 -->
@@ -68,6 +301,10 @@
                 <span
                     style="background:rgba(107,114,128,0.3); color:#9ca3af; font-size:0.72rem; font-weight:600; padding:3px 10px; border-radius:8px;">体验版</span>
                 {% endif %}
+                <a href="/points"
+                    style="display:inline-flex; align-items:center; gap:4px; background:rgba(34,197,94,0.12); color:#86efac; font-size:0.82rem; font-weight:600; text-decoration:none; padding:5px 14px; border-radius:8px; border:1px solid rgba(34,197,94,0.28); transition:all 0.2s; white-space:nowrap;"
+                    onmouseover="this.style.background='rgba(34,197,94,0.22)'"
+                    onmouseout="this.style.background='rgba(34,197,94,0.12)'" title="积分中心">💎 积分中心</a>
                 <a href="/logout"
                     style="display:inline-flex; align-items:center; gap:4px; background:rgba(239,68,68,0.15); color:#f87171; font-size:0.82rem; font-weight:600; text-decoration:none; padding:5px 14px; border-radius:8px; border:1px solid rgba(239,68,68,0.25); transition:all 0.2s; white-space:nowrap;"
                     onmouseover="this.style.background='rgba(239,68,68,0.3)'"
@@ -99,7 +336,215 @@
                     <div class="stat-card-icon">📈</div>
                     <div class="stat-card-info">
                         <span class="stat-label">总开奖期数</span>
-                        <span class="stat-value" id="total-draws">--</span>
+                        <div class="stat-row-inline">
+                            <span class="stat-value" id="total-draws">--</span>
+                            <a href="/reference" class="ref-inline-btn" id="btn-toggle-ref-board"
+                                style="text-decoration:none;"><span>🧭</span><span>对照表</span></a>
+                        </div>
+                        <div class="ref-inline-panel" id="ref-inline-panel">
+                            <div class="ref-board" id="special-reference-board">
+                                <div class="ref-status" id="ref-board-status">点击任意数字高亮它在生肖、波色、五行中的对应关系</div>
+                                <div class="ref-section">
+                                    <div class="ref-title">A. 生肖对应数字</div>
+                                    <div class="ref-row"><span class="ref-label">马（本命）</span>
+                                        <div class="ref-chips"><span class="ref-chip" data-number="01">01</span><span
+                                                class="ref-chip" data-number="13">13</span><span class="ref-chip"
+                                                data-number="25">25</span><span class="ref-chip"
+                                                data-number="37">37</span><span class="ref-chip"
+                                                data-number="49">49</span></div>
+                                    </div>
+                                    <div class="ref-row"><span class="ref-label">蛇</span>
+                                        <div class="ref-chips"><span class="ref-chip" data-number="02">02</span><span
+                                                class="ref-chip" data-number="14">14</span><span class="ref-chip"
+                                                data-number="26">26</span><span class="ref-chip"
+                                                data-number="38">38</span></div>
+                                    </div>
+                                    <div class="ref-row"><span class="ref-label">龙</span>
+                                        <div class="ref-chips"><span class="ref-chip" data-number="03">03</span><span
+                                                class="ref-chip" data-number="15">15</span><span class="ref-chip"
+                                                data-number="27">27</span><span class="ref-chip"
+                                                data-number="39">39</span></div>
+                                    </div>
+                                    <div class="ref-row"><span class="ref-label">兔</span>
+                                        <div class="ref-chips"><span class="ref-chip" data-number="04">04</span><span
+                                                class="ref-chip" data-number="16">16</span><span class="ref-chip"
+                                                data-number="28">28</span><span class="ref-chip"
+                                                data-number="40">40</span></div>
+                                    </div>
+                                    <div class="ref-row"><span class="ref-label">虎</span>
+                                        <div class="ref-chips"><span class="ref-chip" data-number="05">05</span><span
+                                                class="ref-chip" data-number="17">17</span><span class="ref-chip"
+                                                data-number="29">29</span><span class="ref-chip"
+                                                data-number="41">41</span></div>
+                                    </div>
+                                    <div class="ref-row"><span class="ref-label">牛</span>
+                                        <div class="ref-chips"><span class="ref-chip" data-number="06">06</span><span
+                                                class="ref-chip" data-number="18">18</span><span class="ref-chip"
+                                                data-number="30">30</span><span class="ref-chip"
+                                                data-number="42">42</span></div>
+                                    </div>
+                                    <div class="ref-row"><span class="ref-label">鼠</span>
+                                        <div class="ref-chips"><span class="ref-chip" data-number="07">07</span><span
+                                                class="ref-chip" data-number="19">19</span><span class="ref-chip"
+                                                data-number="31">31</span><span class="ref-chip"
+                                                data-number="43">43</span></div>
+                                    </div>
+                                    <div class="ref-row"><span class="ref-label">猪</span>
+                                        <div class="ref-chips"><span class="ref-chip" data-number="08">08</span><span
+                                                class="ref-chip" data-number="20">20</span><span class="ref-chip"
+                                                data-number="32">32</span><span class="ref-chip"
+                                                data-number="44">44</span></div>
+                                    </div>
+                                    <div class="ref-row"><span class="ref-label">狗</span>
+                                        <div class="ref-chips"><span class="ref-chip" data-number="09">09</span><span
+                                                class="ref-chip" data-number="21">21</span><span class="ref-chip"
+                                                data-number="33">33</span><span class="ref-chip"
+                                                data-number="45">45</span></div>
+                                    </div>
+                                    <div class="ref-row"><span class="ref-label">鸡</span>
+                                        <div class="ref-chips"><span class="ref-chip" data-number="10">10</span><span
+                                                class="ref-chip" data-number="22">22</span><span class="ref-chip"
+                                                data-number="34">34</span><span class="ref-chip"
+                                                data-number="46">46</span></div>
+                                    </div>
+                                    <div class="ref-row"><span class="ref-label">猴</span>
+                                        <div class="ref-chips"><span class="ref-chip" data-number="11">11</span><span
+                                                class="ref-chip" data-number="23">23</span><span class="ref-chip"
+                                                data-number="35">35</span><span class="ref-chip"
+                                                data-number="47">47</span></div>
+                                    </div>
+                                    <div class="ref-row"><span class="ref-label">羊</span>
+                                        <div class="ref-chips"><span class="ref-chip" data-number="12">12</span><span
+                                                class="ref-chip" data-number="24">24</span><span class="ref-chip"
+                                                data-number="36">36</span><span class="ref-chip"
+                                                data-number="48">48</span></div>
+                                    </div>
+                                </div>
+                                <div class="ref-section">
+                                    <div class="ref-title">B. 波色对照</div>
+                                    <div class="ref-row"><span class="ref-label" style="color:#fda4af;">红波</span>
+                                        <div class="ref-chips"><span class="ref-chip red"
+                                                data-number="01">01</span><span class="ref-chip red"
+                                                data-number="02">02</span><span class="ref-chip red"
+                                                data-number="07">07</span><span class="ref-chip red"
+                                                data-number="08">08</span><span class="ref-chip red"
+                                                data-number="12">12</span><span class="ref-chip red"
+                                                data-number="13">13</span><span class="ref-chip red"
+                                                data-number="18">18</span><span class="ref-chip red"
+                                                data-number="19">19</span><span class="ref-chip red"
+                                                data-number="23">23</span><span class="ref-chip red"
+                                                data-number="24">24</span><span class="ref-chip red"
+                                                data-number="29">29</span><span class="ref-chip red"
+                                                data-number="30">30</span><span class="ref-chip red"
+                                                data-number="34">34</span><span class="ref-chip red"
+                                                data-number="35">35</span><span class="ref-chip red"
+                                                data-number="40">40</span><span class="ref-chip red"
+                                                data-number="45">45</span><span class="ref-chip red"
+                                                data-number="46">46</span></div>
+                                    </div>
+                                    <div class="ref-row"><span class="ref-label" style="color:#93c5fd;">蓝波</span>
+                                        <div class="ref-chips"><span class="ref-chip blue"
+                                                data-number="03">03</span><span class="ref-chip blue"
+                                                data-number="04">04</span><span class="ref-chip blue"
+                                                data-number="09">09</span><span class="ref-chip blue"
+                                                data-number="10">10</span><span class="ref-chip blue"
+                                                data-number="14">14</span><span class="ref-chip blue"
+                                                data-number="15">15</span><span class="ref-chip blue"
+                                                data-number="20">20</span><span class="ref-chip blue"
+                                                data-number="25">25</span><span class="ref-chip blue"
+                                                data-number="26">26</span><span class="ref-chip blue"
+                                                data-number="31">31</span><span class="ref-chip blue"
+                                                data-number="36">36</span><span class="ref-chip blue"
+                                                data-number="37">37</span><span class="ref-chip blue"
+                                                data-number="41">41</span><span class="ref-chip blue"
+                                                data-number="42">42</span><span class="ref-chip blue"
+                                                data-number="47">47</span><span class="ref-chip blue"
+                                                data-number="48">48</span></div>
+                                    </div>
+                                    <div class="ref-row"><span class="ref-label" style="color:#86efac;">绿波</span>
+                                        <div class="ref-chips"><span class="ref-chip green"
+                                                data-number="05">05</span><span class="ref-chip green"
+                                                data-number="06">06</span><span class="ref-chip green"
+                                                data-number="11">11</span><span class="ref-chip green"
+                                                data-number="16">16</span><span class="ref-chip green"
+                                                data-number="17">17</span><span class="ref-chip green"
+                                                data-number="21">21</span><span class="ref-chip green"
+                                                data-number="22">22</span><span class="ref-chip green"
+                                                data-number="27">27</span><span class="ref-chip green"
+                                                data-number="28">28</span><span class="ref-chip green"
+                                                data-number="32">32</span><span class="ref-chip green"
+                                                data-number="33">33</span><span class="ref-chip green"
+                                                data-number="38">38</span><span class="ref-chip green"
+                                                data-number="39">39</span><span class="ref-chip green"
+                                                data-number="43">43</span><span class="ref-chip green"
+                                                data-number="44">44</span><span class="ref-chip green"
+                                                data-number="49">49</span></div>
+                                    </div>
+                                </div>
+                                <div class="ref-section">
+                                    <div class="ref-title">D. 五行属性</div>
+                                    <div class="ref-row"><span class="ref-label">金</span>
+                                        <div class="ref-chips"><span class="ref-chip" data-number="06">06</span><span
+                                                class="ref-chip" data-number="07">07</span><span class="ref-chip"
+                                                data-number="20">20</span><span class="ref-chip"
+                                                data-number="21">21</span><span class="ref-chip"
+                                                data-number="28">28</span><span class="ref-chip"
+                                                data-number="29">29</span><span class="ref-chip"
+                                                data-number="36">36</span><span class="ref-chip"
+                                                data-number="37">37</span><span class="ref-chip"
+                                                data-number="44">44</span><span class="ref-chip"
+                                                data-number="45">45</span></div>
+                                    </div>
+                                    <div class="ref-row"><span class="ref-label">木</span>
+                                        <div class="ref-chips"><span class="ref-chip" data-number="01">01</span><span
+                                                class="ref-chip" data-number="08">08</span><span class="ref-chip"
+                                                data-number="09">09</span><span class="ref-chip"
+                                                data-number="16">16</span><span class="ref-chip"
+                                                data-number="17">17</span><span class="ref-chip"
+                                                data-number="30">30</span><span class="ref-chip"
+                                                data-number="31">31</span><span class="ref-chip"
+                                                data-number="38">38</span><span class="ref-chip"
+                                                data-number="39">39</span><span class="ref-chip"
+                                                data-number="46">46</span><span class="ref-chip"
+                                                data-number="47">47</span></div>
+                                    </div>
+                                    <div class="ref-row"><span class="ref-label">水</span>
+                                        <div class="ref-chips"><span class="ref-chip" data-number="04">04</span><span
+                                                class="ref-chip" data-number="05">05</span><span class="ref-chip"
+                                                data-number="12">12</span><span class="ref-chip"
+                                                data-number="13">13</span><span class="ref-chip"
+                                                data-number="26">26</span><span class="ref-chip"
+                                                data-number="27">27</span><span class="ref-chip"
+                                                data-number="34">34</span><span class="ref-chip"
+                                                data-number="35">35</span><span class="ref-chip"
+                                                data-number="48">48</span><span class="ref-chip"
+                                                data-number="49">49</span></div>
+                                    </div>
+                                    <div class="ref-row"><span class="ref-label">火</span>
+                                        <div class="ref-chips"><span class="ref-chip" data-number="02">02</span><span
+                                                class="ref-chip" data-number="03">03</span><span class="ref-chip"
+                                                data-number="10">10</span><span class="ref-chip"
+                                                data-number="11">11</span><span class="ref-chip"
+                                                data-number="18">18</span><span class="ref-chip"
+                                                data-number="19">19</span><span class="ref-chip"
+                                                data-number="32">32</span><span class="ref-chip"
+                                                data-number="33">33</span><span class="ref-chip"
+                                                data-number="40">40</span><span class="ref-chip"
+                                                data-number="41">41</span></div>
+                                    </div>
+                                    <div class="ref-row"><span class="ref-label">土</span>
+                                        <div class="ref-chips"><span class="ref-chip" data-number="14">14</span><span
+                                                class="ref-chip" data-number="15">15</span><span class="ref-chip"
+                                                data-number="22">22</span><span class="ref-chip"
+                                                data-number="23">23</span><span class="ref-chip"
+                                                data-number="24">24</span><span class="ref-chip"
+                                                data-number="25">25</span><span class="ref-chip"
+                                                data-number="42">42</span><span class="ref-chip"
+                                                data-number="43">43</span></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="stat-card glass">
@@ -277,6 +722,25 @@
                     </div>
                 </div>
 
+                <!-- 五行分析 -->
+                <div class="chart-card glass" id="chart-card-five-elements">
+                    <h3 class="chart-title">🪵 五行分析监控面板</h3>
+                    <p style="font-size: 0.75rem; color: #9ca3af; margin-bottom: 8px; line-height: 1.5;">
+                        <strong class="text-yellow-400">【卡方 + 关联规则 +
+                            泊松遗漏】</strong>用卡方检验识别非随机偏差，用状态关联追踪相生相克倾向，再用泊松分布监控遗漏极限与均值回归窗口。
+                    </p>
+                    <div style="position: relative; width: 100%; height: 360px; margin-bottom: 14px;">
+                        <canvas id="chart-five-elements"></canvas>
+                    </div>
+                    <div id="five-elements-summary"
+                        style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:10px;">
+                    </div>
+                    <div id="five-elements-heatmap" style="margin-top:14px;"></div>
+                    <div id="five-elements-rules" style="margin-top:12px;"></div>
+                    <div id="five-elements-omission" style="margin-top:12px;"></div>
+                    <div id="five-elements-balls" style="margin-top:12px;"></div>
+                </div>
+
                 <!-- 尾数分布 -->
                 <div class="chart-card glass">
                     <h3 class="chart-title">🔢 尾数分布</h3>
@@ -308,6 +772,9 @@
                 <div class="sim-control glass">
                     <h2 class="sim-title">🧠 AI 智能模拟开奖</h2>
                     <p class="sim-description">基于多维统计加权叠加 + Gemini AI 概率推断，综合分析最有可能出现的号码组合。</p>
+                    <div id="sim-billing-tip"
+                        style="margin:12px 0 4px; padding:10px 12px; border-radius:12px; border:1px solid rgba(148,163,184,.18); background:rgba(15,23,42,.42); color:#cbd5e1; font-size:.84rem; line-height:1.65;">
+                    </div>
 
                     <!-- 加权维度勾选 -->
                     <div class="sim-dimensions">
@@ -379,8 +846,14 @@
                     <div
                         style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                         <h3 style="color: #c084fc; margin: 0;">🐲 AI 生肖推算结果</h3>
-                        <span class="ai-confidence" id="zodiac-confidence"
-                            style="background: rgba(168,85,247,0.2); border-color: rgba(168,85,247,0.4);"></span>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <span class="ai-confidence" id="zodiac-confidence"
+                                style="background: rgba(168,85,247,0.2); border-color: rgba(168,85,247,0.4);"></span>
+                            <button class="btn-share-result" onclick="shareAIResult('zodiac', this)" title="保存生肖推算结果为图片"
+                                style="background: rgba(168,85,247,0.15); border-color: rgba(168,85,247,0.3);">
+                                📸 存图
+                            </button>
+                        </div>
                     </div>
                     <div id="zodiac-predictions"
                         style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px;"></div>
@@ -392,7 +865,12 @@
                 <div id="sim-ai-result" class="sim-ai-result glass" style="display:none;">
                     <div class="ai-result-header">
                         <h3>🤖 AI 智能分析结果</h3>
-                        <span class="ai-confidence" id="ai-confidence">置信度: --</span>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <span class="ai-confidence" id="ai-confidence">置信度: --</span>
+                            <button id="btn-share-ai-result" class="btn-share-result" onclick="shareAIResult('ai', this)" title="保存分析结果为图片">
+                                📸 存图
+                            </button>
+                        </div>
                     </div>
                     <div class="ai-result-balls" id="ai-result-balls"></div>
                     <div class="ai-analysis-text" id="ai-analysis-text"></div>
@@ -433,65 +911,43 @@
         <!-- ==================== 历史记录面板 ==================== -->
         <section id="section-history" class="content-section">
             <div class="history-wrapper glass">
-                <h2 class="history-title">📋 历史开奖记录</h2>
-                <div class="history-table-container">
-                    <table class="history-table" id="history-table">
-                        <thead>
-                            <tr>
-                                <th>期号</th>
-                                <th>日期</th>
-                                <th>特码</th>
-                            </tr>
-                        </thead>
-                        <tbody id="history-tbody">
-                        </tbody>
-                    </table>
-                </div>
-                <div class="pagination" id="pagination"></div>
-            </div>
-        </section>
-
-        <!-- ==================== AI 预测历史记录面板 ==================== -->
-        <section id="section-ai-history" class="content-section">
-            <div class="history-wrapper glass" style="max-width: 1000px; margin: 0 auto;">
-                <div class="history-header"
-                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                    <h2 class="history-title" style="margin-bottom: 0;">📂 AI 深度分析档案</h2>
-                    <div style="font-size: 0.85rem; color: var(--text-secondary);">记录所有通过大模型智能推算的详尽解析</div>
-                </div>
-
-                <div class="ai-history-container" id="ai-history-container"
-                    style="display: flex; flex-direction: column; gap: 20px;">
-                    <!-- 动态插入的记录卡片 -->
-                    <div style="text-align: center; color: var(--text-secondary); padding: 40px;">
-                        加载中...
+                <div
+                    style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
+                    <h2 class="history-title" style="margin:0;">📋 历史记录</h2>
+                    <div style="display:flex; gap:8px;">
+                        <button class="history-tab-btn active" id="btn-history-draw"
+                            onclick="switchHistoryTab('draw')">📊 开奖记录</button>
+                        <button class="history-tab-btn" id="btn-history-ai" onclick="switchHistoryTab('ai')">📂 AI
+                            档案</button>
                     </div>
                 </div>
 
-                <div class="pagination ai-pagination" id="ai-pagination" style="margin-top: 24px;"></div>
-            </div>
-        </section>
-
-        <!-- ==================== AI 预测历史记录面板 ==================== -->
-        <section id="section-ai-history" class="content-section" style="display: none;">
-            <div class="history-wrapper glass" style="max-width: 1000px; margin: 0 auto; padding: 24px;">
-                <div class="history-header"
-                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 16px;">
-                    <h2 class="history-title" style="margin-bottom: 0; font-size: 1.5rem; color: #c084fc;">📂 AI 深度分析档案
-                    </h2>
-                    <div style="font-size: 0.85rem; color: var(--text-secondary);">记录所有通过大模型智能推算的详尽解析 (可手动删除)</div>
-                </div>
-
-                <div class="ai-history-container" id="ai-history-container"
-                    style="display: flex; flex-direction: column; gap: 24px;">
-                    <!-- 动态插入的记录卡片 -->
-                    <div style="text-align: center; color: var(--text-secondary); padding: 40px;">
-                        暂无 AI 智能推算的历史归档数据
+                <!-- 开奖记录 -->
+                <div id="history-draw-section">
+                    <div class="history-table-container">
+                        <table class="history-table" id="history-table">
+                            <thead>
+                                <tr>
+                                    <th>期号</th>
+                                    <th>日期</th>
+                                    <th>特码</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-tbody">
+                            </tbody>
+                        </table>
                     </div>
+                    <div class="pagination" id="pagination"></div>
                 </div>
 
-                <div class="pagination ai-pagination" id="ai-pagination"
-                    style="margin-top: 32px; display: flex; justify-content: center;"></div>
+                <!-- AI 档案 -->
+                <div id="history-ai-section" style="display:none;">
+                    <div class="ai-history-container" id="ai-history-container"
+                        style="display:flex; flex-direction:column; gap:20px;">
+                        <div style="text-align:center; color:var(--text-secondary); padding:40px;">加载中...</div>
+                    </div>
+                    <div class="pagination ai-pagination" id="ai-pagination" style="margin-top:24px;"></div>
+                </div>
             </div>
         </section>
 
@@ -503,7 +959,7 @@
         <p>⚠️ 彩票开奖为独立随机事件，数据分析不构成任何投注建议</p>
     </footer>
 
-    <script src="{{ url_for('static', filename='js/app.js') }}?v=18"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=52"></script>
 
     <!-- 设置弹窗 Modal -->
     <div id="settings-modal" class="settings-modal" style="display:none;">
@@ -511,33 +967,67 @@
         <div class="settings-panel">
             <div class="settings-header">
                 <h2>⚙️ 系统设置</h2>
-                <button class="settings-close" id="btn-close-settings">&times;</button>
+                <div class="settings-actions">
+                    <button class="btn-save-settings" id="btn-save-settings">💾 保存设置</button>
+                    <button class="settings-close" id="btn-close-settings">&times;</button>
+                </div>
             </div>
             <div class="settings-body">
                 <div class="settings-section">
                     <h3>🤖 AI 模型配置</h3>
                     <div class="settings-row">
                         <label>模型平台</label>
-                        <select id="set-ai-platform">
-                            <option value="google">Google Gemini</option>
-                            <option value="openai">OpenAI</option>
-                        </select>
+                        <div class="settings-inline-actions">
+                            <select id="set-ai-platform"></select>
+                        </div>
                     </div>
                     <div class="settings-row">
                         <label>模型名称</label>
-                        <select id="set-ai-model">
-                            <option value="gemini-2.5-pro">Gemini 2.5 Pro (稳定版)</option>
-                            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                            <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (最新推荐)</option>
-                            <option value="gemini-3-pro-preview">Gemini 3 Pro</option>
-                            <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
-                        </select>
+                        <div class="settings-inline-actions">
+                            <select id="set-ai-model"></select>
+                            <button type="button" id="btn-add-model" class="settings-mini-btn vip-only">+ 添加</button>
+                        </div>
                     </div>
-                    <div class="settings-row">
+                    <div class="settings-row vip-only">
+                        <label>添加平台</label>
+                        <div class="settings-inline-actions">
+                            <input type="text" id="set-custom-platform"
+                                placeholder="输入平台名，如 deepseek / nvidia / openrouter">
+                            <button type="button" id="btn-add-platform" class="settings-mini-btn"
+                                style="margin-left:8px;">+ 添加</button>
+                        </div>
+                    </div>
+                    <div class="settings-row settings-row-list vip-only">
+                        <label>平台列表</label>
+                        <div id="custom-platform-list" class="settings-chip-list"></div>
+                    </div>
+                    <div class="settings-row vip-only">
+                        <label>添加模型</label>
+                        <div class="settings-inline-actions">
+                            <input type="text" id="set-custom-model" placeholder="输入模型名，如 deepseek-chat / gpt-4o-mini">
+                            <button type="button" id="btn-add-model-input" class="settings-mini-btn"
+                                style="margin-left:8px;">+ 添加</button>
+                        </div>
+                    </div>
+                    <div class="settings-row settings-row-list vip-only">
+                        <label>当前平台模型</label>
+                        <div id="custom-model-list" class="settings-chip-list"></div>
+                    </div>
+                    <div class="settings-row vip-only" id="ai-base-row">
+                        <label>API 地址</label>
+                        <input type="text" id="set-ai-base" placeholder="可选，如 https://api.openai.com/v1">
+                    </div>
+                    <div class="settings-row vip-only" id="ai-key-row">
                         <label>API Key</label>
-                        <input type="password" id="set-ai-key" placeholder="输入你的 API Key">
+                        <div class="settings-key-wrap">
+                            <input type="password" id="set-ai-key" placeholder="输入你的 API Key">
+                            <button type="button" id="btn-toggle-ai-key" class="settings-eye-btn"
+                                title="显示/隐藏 API Key">👁</button>
+                        </div>
                         <small id="set-ai-key-hint" class="text-gray-500"></small>
                     </div>
+                    <div id="settings-permission-tip" class="text-gray-500" style="margin-top:6px;"></div>
+                    <div id="settings-role-rules" style="margin-top:10px;"></div>
                 </div>
                 <div class="settings-section">
                     <h3>📊 统计图表期数</h3>
@@ -586,9 +1076,6 @@
                     </div>
                     <small style="color:#6b7280; display:block; margin-top:8px;">💡 绑定邮箱后可用于找回密码。修改密码需先验证旧密码。</small>
                 </div>
-            </div>
-            <div class="settings-footer">
-                <button class="btn-save-settings" id="btn-save-settings">💾 保存设置</button>
             </div>
         </div>
     </div>

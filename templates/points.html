@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>积分中心</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script>
+        window.__USER__ = JSON.parse('{{ user | tojson | safe if user else "{}" }}');
+    </script>
+    <style>
+        .points-main { max-width: 1200px; margin: 24px auto; padding: 0 16px 24px; }
+        .points-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+        .points-balance { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; }
+        .points-card { padding: 18px; border-radius: 14px; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(148, 163, 184, 0.2); }
+        .points-card .label { color: #94a3b8; font-size: 0.9rem; }
+        .points-card .value { color: #f8fafc; font-size: 2rem; font-weight: 800; margin-top: 6px; }
+        .points-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .table-wrap { overflow-x: auto; }
+        .data-table { width: 100%; border-collapse: collapse; min-width: 520px; }
+        .data-table th, .data-table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid rgba(148, 163, 184, 0.16); color: #e2e8f0; font-size: 0.9rem; }
+        .data-table th { color: #cbd5e1; font-weight: 700; background: rgba(30, 41, 59, 0.55); }
+        .points-pos { color: #22c55e; font-weight: 700; }
+        .points-neg { color: #f87171; font-weight: 700; }
+        .panel-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; gap: 8px; flex-wrap: wrap; }
+        .pager { display: inline-flex; gap: 8px; }
+        .pager-btn { border: 1px solid rgba(148, 163, 184, 0.28); background: rgba(15, 23, 42, 0.8); color: #e2e8f0; padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+        .pager-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .muted { color: #94a3b8; font-size: 0.86rem; }
+        .error-text { color: #fca5a5; font-size: 0.9rem; }
+        .actions a { text-decoration: none; color: #e2e8f0; padding: 6px 10px; border: 1px solid rgba(148, 163, 184, 0.22); border-radius: 8px; }
+        .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+        @media (max-width: 960px) {
+            .points-grid { grid-template-columns: 1fr; }
+            .points-balance { grid-template-columns: 1fr; }
+        }
+    </style>
+
+    <!-- CSRF Token Global Setup -->
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <script>
+        const originalFetch = window.fetch;
+        window.fetch = async function(resource, config) {
+            config = config || {};
+            const method = (config.method || 'GET').toUpperCase();
+            if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+                config.headers = {
+                    ...config.headers,
+                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content
+                };
+            }
+            return originalFetch(resource, config);
+        };
+    </script>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <span class="brand-icon">💎</span>
+            <h1>积分中心</h1>
+        </div>
+        <div class="actions">
+            <a href="/">返回首页</a>
+            <a href="/logout">退出登录</a>
+        </div>
+    </nav>
+
+    <main class="points-main">
+        <section class="points-header">
+            <div>
+                <h2 style="margin: 0; color: #f8fafc;">{{ user.username if user else '用户' }} 的积分账户</h2>
+                <p class="muted" style="margin: 6px 0 0;">角色：{{ user.role if user else 'trial' }}</p>
+            </div>
+        </section>
+
+        <section class="points-balance">
+            <div class="points-card">
+                <div class="label">当前积分余额</div>
+                <div class="value" id="points-balance">--</div>
+            </div>
+            <div class="points-card">
+                <div class="label">推荐码</div>
+                <div class="value" id="ref-code" style="font-size: 1.35rem; letter-spacing: 1px;">--</div>
+            </div>
+        </section>
+
+        <p id="page-error" class="error-text" style="display:none;"></p>
+
+        <section class="points-grid">
+            <article class="points-card">
+                <h3 style="margin-top:0; color:#f8fafc;">积分流水</h3>
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>时间</th>
+                                <th>变动</th>
+                                <th>余额</th>
+                                <th>原因</th>
+                                <th>备注</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ledger-body"></tbody>
+                    </table>
+                </div>
+                <div class="panel-footer">
+                    <span class="muted" id="ledger-page-info">-</span>
+                    <div class="pager">
+                        <button id="ledger-prev" class="pager-btn" type="button">上一页</button>
+                        <button id="ledger-next" class="pager-btn" type="button">下一页</button>
+                    </div>
+                </div>
+            </article>
+
+            <article class="points-card">
+                <h3 style="margin-top:0; color:#f8fafc;">充值记录</h3>
+                <div class="table-wrap">
+                    <table class="data-table" style="min-width:420px;">
+                        <thead>
+                            <tr>
+                                <th>时间</th>
+                                <th>金额(元)</th>
+                                <th>积分</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recharge-body"></tbody>
+                    </table>
+                </div>
+                <div class="panel-footer">
+                    <span class="muted" id="recharge-page-info">-</span>
+                    <div class="pager">
+                        <button id="recharge-prev" class="pager-btn" type="button">上一页</button>
+                        <button id="recharge-next" class="pager-btn" type="button">下一页</button>
+                    </div>
+                </div>
+            </article>
+        </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='js/points.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>特码对照表</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=4">
+    <style>
+        .ref-page { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
+        .ref-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px; }
+        .ref-back { display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border-radius:999px; border:1px solid rgba(148,163,184,.3); color:#e2e8f0; text-decoration:none; background:rgba(30,41,59,.62); }
+        .ref-title { color:#f8fafc; font-size:1.2rem; font-weight:800; }
+        .ref-grid { display:grid; gap:14px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+        .ref-card { padding:14px; border-radius:12px; border:1px solid rgba(148,163,184,.18); background:rgba(15,23,42,.5); }
+        .ref-card h3 { margin:0 0 10px; color:#e9d5ff; }
+        .ref-row { margin:6px 0; color:#cbd5e1; font-size:.9rem; line-height:1.6; }
+        .chip-wrap { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+        .chip {
+            width: 38px;
+            height: 38px;
+            display:inline-flex;
+            justify-content:center;
+            align-items:center;
+            border-radius:50%;
+            color:#fff;
+            font-weight:800;
+            font-size:.86rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,.26);
+            border: 2px solid rgba(255,255,255,.14);
+            text-shadow: 0 1px 2px rgba(0,0,0,.3);
+        }
+        .chip.red { background: linear-gradient(135deg, #ef4444, #dc2626); }
+        .chip.blue { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+        .chip.green { background: linear-gradient(135deg, #22c55e, #16a34a); }
+        .chip.gold { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .chip.wood { background: linear-gradient(135deg, #10b981, #047857); }
+        .chip.water { background: linear-gradient(135deg, #06b6d4, #0f766e); }
+        .chip.fire { background: linear-gradient(135deg, #f97316, #ea580c); }
+        .chip.earth { background: linear-gradient(135deg, #a16207, #854d0e); }
+        .zodiac-balls { display:flex; flex-direction:column; gap:10px; }
+        .zodiac-row { display:flex; gap:8px; align-items:flex-start; flex-wrap:wrap; }
+        .zodiac-label { min-width:72px; color:#e5e7eb; font-weight:700; padding-top:6px; }
+        @media (max-width: 768px) {
+            .ref-page { margin: 14px auto; padding: 0 10px; }
+            .ref-head { flex-direction: column; align-items: flex-start; }
+            .ref-title { font-size: 1.02rem; }
+            .ref-back { padding: 7px 12px; font-size: .82rem; }
+            .ref-grid { grid-template-columns: 1fr; gap: 10px; }
+            .ref-card { padding: 12px; }
+            .ref-card h3 { font-size: .95rem; }
+            .ref-row { font-size: .82rem; }
+            .chip { min-width: 28px; font-size: .76rem; padding: 3px 6px; }
+            .zodiac-label { min-width:60px; font-size:.82rem; }
+        }
+    </style>
+
+    <!-- CSRF Token Global Setup -->
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <script>
+        const originalFetch = window.fetch;
+        window.fetch = async function(resource, config) {
+            config = config || {};
+            const method = (config.method || 'GET').toUpperCase();
+            if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+                config.headers = {
+                    ...config.headers,
+                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content
+                };
+            }
+            return originalFetch(resource, config);
+        };
+    </script>
+</head>
+<body>
+    <div class="ref-page">
+        <div class="ref-head">
+            <div class="ref-title">📚 特码对照表</div>
+            <a href="/" class="ref-back">⬅ 返回首页</a>
+        </div>
+
+        <div class="ref-grid">
+            <div class="ref-card">
+                <h3>A. 生肖对应数字</h3>
+                <div class="zodiac-balls">
+                    <div class="zodiac-row"><div class="zodiac-label">马（本命）</div><div class="chip-wrap"><span class="chip red">01</span><span class="chip blue">13</span><span class="chip blue">25</span><span class="chip blue">37</span><span class="chip green">49</span></div></div>
+                    <div class="zodiac-row"><div class="zodiac-label">蛇</div><div class="chip-wrap"><span class="chip red">02</span><span class="chip blue">14</span><span class="chip blue">26</span><span class="chip green">38</span></div></div>
+                    <div class="zodiac-row"><div class="zodiac-label">龙</div><div class="chip-wrap"><span class="chip blue">03</span><span class="chip blue">15</span><span class="chip green">27</span><span class="chip green">39</span></div></div>
+                    <div class="zodiac-row"><div class="zodiac-label">兔</div><div class="chip-wrap"><span class="chip blue">04</span><span class="chip green">16</span><span class="chip green">28</span><span class="chip red">40</span></div></div>
+                    <div class="zodiac-row"><div class="zodiac-label">虎</div><div class="chip-wrap"><span class="chip green">05</span><span class="chip green">17</span><span class="chip red">29</span><span class="chip blue">41</span></div></div>
+                    <div class="zodiac-row"><div class="zodiac-label">牛</div><div class="chip-wrap"><span class="chip green">06</span><span class="chip red">18</span><span class="chip red">30</span><span class="chip blue">42</span></div></div>
+                    <div class="zodiac-row"><div class="zodiac-label">鼠</div><div class="chip-wrap"><span class="chip red">07</span><span class="chip red">19</span><span class="chip blue">31</span><span class="chip green">43</span></div></div>
+                    <div class="zodiac-row"><div class="zodiac-label">猪</div><div class="chip-wrap"><span class="chip red">08</span><span class="chip blue">20</span><span class="chip green">32</span><span class="chip green">44</span></div></div>
+                    <div class="zodiac-row"><div class="zodiac-label">狗</div><div class="chip-wrap"><span class="chip blue">09</span><span class="chip green">21</span><span class="chip green">33</span><span class="chip red">45</span></div></div>
+                    <div class="zodiac-row"><div class="zodiac-label">鸡</div><div class="chip-wrap"><span class="chip blue">10</span><span class="chip green">22</span><span class="chip red">34</span><span class="chip red">46</span></div></div>
+                    <div class="zodiac-row"><div class="zodiac-label">猴</div><div class="chip-wrap"><span class="chip green">11</span><span class="chip red">23</span><span class="chip red">35</span><span class="chip blue">47</span></div></div>
+                    <div class="zodiac-row"><div class="zodiac-label">羊</div><div class="chip-wrap"><span class="chip red">12</span><span class="chip red">24</span><span class="chip blue">36</span><span class="chip blue">48</span></div></div>
+                </div>
+            </div>
+
+            <div class="ref-card">
+                <h3>B. 波色对照</h3>
+                <div class="ref-row">红波</div>
+                <div class="chip-wrap">
+                    <span class="chip red">01</span><span class="chip red">02</span><span class="chip red">07</span><span class="chip red">08</span><span class="chip red">12</span><span class="chip red">13</span><span class="chip red">18</span><span class="chip red">19</span><span class="chip red">23</span><span class="chip red">24</span><span class="chip red">29</span><span class="chip red">30</span><span class="chip red">34</span><span class="chip red">35</span><span class="chip red">40</span><span class="chip red">45</span><span class="chip red">46</span>
+                </div>
+                <div class="ref-row">蓝波</div>
+                <div class="chip-wrap">
+                    <span class="chip blue">03</span><span class="chip blue">04</span><span class="chip blue">09</span><span class="chip blue">10</span><span class="chip blue">14</span><span class="chip blue">15</span><span class="chip blue">20</span><span class="chip blue">25</span><span class="chip blue">26</span><span class="chip blue">31</span><span class="chip blue">36</span><span class="chip blue">37</span><span class="chip blue">41</span><span class="chip blue">42</span><span class="chip blue">47</span><span class="chip blue">48</span>
+                </div>
+                <div class="ref-row">绿波</div>
+                <div class="chip-wrap">
+                    <span class="chip green">05</span><span class="chip green">06</span><span class="chip green">11</span><span class="chip green">16</span><span class="chip green">17</span><span class="chip green">21</span><span class="chip green">22</span><span class="chip green">27</span><span class="chip green">28</span><span class="chip green">32</span><span class="chip green">33</span><span class="chip green">38</span><span class="chip green">39</span><span class="chip green">43</span><span class="chip green">44</span><span class="chip green">49</span>
+                </div>
+            </div>
+
+            <div class="ref-card">
+                <h3>D. 五行属性</h3>
+                <div class="ref-row">金</div>
+                <div class="chip-wrap"><span class="chip gold">06</span><span class="chip gold">07</span><span class="chip gold">20</span><span class="chip gold">21</span><span class="chip gold">28</span><span class="chip gold">29</span><span class="chip gold">36</span><span class="chip gold">37</span><span class="chip gold">44</span><span class="chip gold">45</span></div>
+                <div class="ref-row">木</div>
+                <div class="chip-wrap"><span class="chip wood">01</span><span class="chip wood">08</span><span class="chip wood">09</span><span class="chip wood">16</span><span class="chip wood">17</span><span class="chip wood">30</span><span class="chip wood">31</span><span class="chip wood">38</span><span class="chip wood">39</span><span class="chip wood">46</span><span class="chip wood">47</span></div>
+                <div class="ref-row">水</div>
+                <div class="chip-wrap"><span class="chip water">04</span><span class="chip water">05</span><span class="chip water">12</span><span class="chip water">13</span><span class="chip water">26</span><span class="chip water">27</span><span class="chip water">34</span><span class="chip water">35</span><span class="chip water">48</span><span class="chip water">49</span></div>
+                <div class="ref-row">火</div>
+                <div class="chip-wrap"><span class="chip fire">02</span><span class="chip fire">03</span><span class="chip fire">10</span><span class="chip fire">11</span><span class="chip fire">18</span><span class="chip fire">19</span><span class="chip fire">32</span><span class="chip fire">33</span><span class="chip fire">40</span><span class="chip fire">41</span></div>
+                <div class="ref-row">土</div>
+                <div class="chip-wrap"><span class="chip earth">14</span><span class="chip earth">15</span><span class="chip earth">22</span><span class="chip earth">23</span><span class="chip earth">24</span><span class="chip earth">25</span><span class="chip earth">42</span><span class="chip earth">43</span></div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

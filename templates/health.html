@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统健康页</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=4">
+    <style>
+        body { background: linear-gradient(135deg, #0f172a, #111827 55%, #1e293b); }
+        .health-wrap { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
+        .health-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:18px; }
+        .health-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:14px; }
+        .health-card { padding:18px; border-radius:16px; border:1px solid rgba(148,163,184,.14); background:rgba(15,23,42,.52); }
+        .health-title { font-size:1rem; font-weight:800; color:#f8fafc; margin-bottom:10px; }
+        .health-msg { color:#cbd5e1; font-size:.88rem; line-height:1.6; }
+        .light { width:12px; height:12px; border-radius:50%; display:inline-block; margin-right:8px; box-shadow:0 0 14px currentColor; }
+        .green { color:#4ade80; background:#4ade80; }
+        .yellow { color:#facc15; background:#facc15; }
+        .red { color:#f87171; background:#f87171; }
+        .back-link { display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border-radius:999px; border:1px solid rgba(148,163,184,.28); text-decoration:none; color:#e2e8f0; }
+    </style>
+
+    <!-- CSRF Token Global Setup -->
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <script>
+        const originalFetch = window.fetch;
+        window.fetch = async function(resource, config) {
+            config = config || {};
+            const method = (config.method || 'GET').toUpperCase();
+            if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+                config.headers = {
+                    ...config.headers,
+                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content
+                };
+            }
+            return originalFetch(resource, config);
+        };
+    </script>
+</head>
+<body>
+    <div class="health-wrap">
+        <div class="health-head">
+            <div>
+                <div style="font-size:1.2rem; font-weight:900; color:#f8fafc;">🩺 系统健康页</div>
+                <div style="color:#94a3b8; margin-top:4px;">统一查看 AI、数据库、抓数、缓存与日志状态</div>
+            </div>
+            <a href="/admin" class="back-link">⬅ 返回后台</a>
+        </div>
+        <div id="health-grid" class="health-grid">
+            <div class="health-card">加载中...</div>
+        </div>
+    </div>
+    <script>
+        function renderHealthCard(title, item = {}) {
+            const status = item.status || 'yellow';
+            return `
+                <div class="health-card">
+                    <div class="health-title"><span class="light ${status}"></span>${title}</div>
+                    <div class="health-msg">${item.message || '—'}</div>
+                </div>
+            `;
+        }
+
+        async function loadHealth() {
+            const grid = document.getElementById('health-grid');
+            try {
+                const res = await fetch('/api/admin/health');
+                const data = await res.json();
+                if (!data.success) {
+                    grid.innerHTML = '<div class="health-card">健康状态读取失败</div>';
+                    return;
+                }
+                const h = data.data || {};
+                grid.innerHTML = [
+                    renderHealthCard('AI 模型', h.ai),
+                    renderHealthCard('数据库', h.database),
+                    renderHealthCard('数据同步', h.data_sync),
+                    renderHealthCard('缓存', h.cache),
+                    renderHealthCard('日志', h.logs),
+                ].join('');
+            } catch (e) {
+                grid.innerHTML = `<div class="health-card">读取失败: ${e.message}</div>`;
+            }
+        }
+
+        loadHealth();
+    </script>
+</body>
+</html>

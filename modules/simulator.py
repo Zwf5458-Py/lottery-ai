@@ -11,9 +11,11 @@ import secrets
 import json
 import urllib.request
 import ssl
+import os
 from datetime import datetime
 from modules.data_processor import get_db_connection
 from modules.logger import get_logger
+from modules.constants import get_zodiac_mapping, get_color, RED_NUMS, BLUE_NUMS, GREEN_NUMS, ZODIAC_ORDER
 from collections import Counter
 
 logger = get_logger()
@@ -21,10 +23,11 @@ logger = get_logger()
 # 使用 secrets.SystemRandom 作为加密级随机数生成器
 _secure_random = secrets.SystemRandom()
 
-# 创建不验证证书的 SSL 上下文（解决部分环境 SSL 握手失败问题）
+# 默认启用 TLS 证书校验；仅在显式设置 INSECURE_SSL=1 时降级（不建议生产使用）
 ssl_context = ssl.create_default_context()
-ssl_context.check_hostname = False
-ssl_context.verify_mode = ssl.CERT_NONE
+if os.environ.get('INSECURE_SSL', '0') == '1':
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
 
 def can_simulate_today(lottery_type: str = 'macaujc') -> bool:
     """
@@ -103,31 +106,7 @@ def can_simulate_today(lottery_type: str = 'macaujc') -> bool:
     return True
 
 
-def get_zodiac_mapping(lottery_type: str = 'macaujc') -> dict:
-    """
-    2026年（马年）1-49 号码 -> 生肖 映射字典
-    直接硬编码，不依赖数据库的 zodiac 文本字段（避免繁简体不匹配）
-    返回: {number(int): zodiac(str)}
-    """
-    zodiac_nums = {
-        "马": [1, 13, 25, 37, 49],
-        "蛇": [2, 14, 26, 38],
-        "龙": [3, 15, 27, 39],
-        "兔": [4, 16, 28, 40],
-        "虎": [5, 17, 29, 41],
-        "牛": [6, 18, 30, 42],
-        "鼠": [7, 19, 31, 43],
-        "猪": [8, 20, 32, 44],
-        "狗": [9, 21, 33, 45],
-        "鸡": [10, 22, 34, 46],
-        "猴": [11, 23, 35, 47],
-        "羊": [12, 24, 36, 48],
-    }
-    mapping = {}
-    for zodiac_name, nums in zodiac_nums.items():
-        for n in nums:
-            mapping[n] = zodiac_name
-    return mapping
+# get_zodiac_mapping 已迁移到 modules/constants.py，此处通过顶部 import 引入
 
 
 def _build_markov_transition_weights(conn, lottery_type: str, z_map: dict, max_periods: int = 0) -> dict:
@@ -137,12 +116,14 @@ def _build_markov_transition_weights(conn, lottery_type: str, z_map: dict, max_p
     返回: {zodiac_name: weight_float}
     """
     # 按时间正序拉取全量或指定期数的特码数字
-    limit_clause = f"LIMIT {max_periods}" if max_periods > 0 else ""
-    query = f"SELECT special_num FROM (SELECT special_num, draw_date, draw_number FROM lottery_history WHERE lottery_type=? ORDER BY draw_date DESC, draw_number DESC {limit_clause}) ORDER BY draw_date ASC, draw_number ASC"
+    if max_periods > 0:
+        query = "SELECT special_num FROM (SELECT special_num, draw_date, draw_number FROM lottery_history WHERE lottery_type=? ORDER BY draw_date DESC, draw_number DESC LIMIT ?) ORDER BY draw_date ASC, draw_number ASC"
+        rows = conn.execute(query, (lottery_type, int(max_periods))).fetchall()
+    else:
+        query = "SELECT special_num FROM (SELECT special_num, draw_date, draw_number FROM lottery_history WHERE lottery_type=? ORDER BY draw_date DESC, draw_number DESC) ORDER BY draw_date ASC, draw_number ASC"
+        rows = conn.execute(query, (lottery_type,)).fetchall()
     
-    rows = conn.execute(query, (lottery_type,)).fetchall()
-    
-    zodiac_order = ["鼠", "牛", "虎", "兔", "龙", "蛇", "马", "羊", "猴", "鸡", "狗", "猪"]
+    zodiac_order = ZODIAC_ORDER
     default_weights = {z: 1.0 for z in zodiac_order}
     if not rows or len(rows) < 2:
         return default_weights
@@ -202,24 +183,17 @@ def _build_color_markov_transition_weights(conn, lottery_type: str, max_periods:
     """
     构建特码波色（红、蓝、绿）的马尔可夫链状态转移权重。
     """
-    limit_clause = f"LIMIT {max_periods}" if max_periods > 0 else ""
-    query = f"SELECT special_num FROM (SELECT special_num, draw_date, draw_number FROM lottery_history WHERE lottery_type=? ORDER BY draw_date DESC, draw_number DESC {limit_clause}) ORDER BY draw_date ASC, draw_number ASC"
-    rows = conn.execute(query, (lottery_type,)).fetchall()
+    if max_periods > 0:
+        query = "SELECT special_num FROM (SELECT special_num, draw_date, draw_number FROM lottery_history WHERE lottery_type=? ORDER BY draw_date DESC, draw_number DESC LIMIT ?) ORDER BY draw_date ASC, draw_number ASC"
+        rows = conn.execute(query, (lottery_type, int(max_periods))).fetchall()
+    else:
+        query = "SELECT special_num FROM (SELECT special_num, draw_date, draw_number FROM lottery_history WHERE lottery_type=? ORDER BY draw_date DESC, draw_number DESC) ORDER BY draw_date ASC, draw_number ASC"
+        rows = conn.execute(query, (lottery_type,)).fetchall()
     
     color_order = ["红波", "蓝波", "绿波"]
     default_weights = {c: 1.0 for c in color_order}
     if not rows or len(rows) < 2:
         return default_weights
-
-    # 红蓝绿波色判断
-    def get_color(num):
-        red = {1, 2, 7, 8, 12, 13, 18, 19, 23, 24, 29, 30, 34, 35, 40, 45, 46}
-        blue = {3, 4, 9, 10, 14, 15, 20, 25, 26, 31, 36, 37, 41, 42, 47, 48}
-        green = {5, 6, 11, 16, 17, 21, 22, 27, 28, 32, 33, 38, 39, 43, 44, 49}
-        if num in red: return "红波"
-        if num in blue: return "蓝波"
-        if num in green: return "绿波"
-        return None
 
     # 初始化 3x3 转移矩阵
     transition_matrix = {c1: {c2: 0 for c2 in color_order} for c1 in color_order}
@@ -229,8 +203,8 @@ def _build_color_markov_transition_weights(conn, lottery_type: str, max_periods:
     for r in rows:
         try:
             num = int(r[0])
-            c = get_color(num)
-            if c:
+            c = get_color(num)  # 来自 modules.constants
+            if c and c != '未知':
                 c_seq.append(c)
         except:
             pass
@@ -282,9 +256,9 @@ def _calculate_trend_weights(lottery_type: str = 'macaujc', dimensions: list = N
     
     conn = get_db_connection()
     
-    # 获取最近 10 期计算大小单双长龙
-    rows_10 = conn.execute(
-        "SELECT special_num FROM lottery_history WHERE lottery_type=? ORDER BY draw_date DESC, draw_number DESC LIMIT 10",
+    # 获取最近 30 期计算复杂大小单双模式
+    rows_30 = conn.execute(
+        "SELECT special_num FROM lottery_history WHERE lottery_type=? ORDER BY draw_date DESC, draw_number DESC LIMIT 30",
         (lottery_type,)
     ).fetchall()
     
@@ -297,6 +271,13 @@ def _calculate_trend_weights(lottery_type: str = 'macaujc', dimensions: list = N
     
     # 额外的 DB 连接用于新维度查询
     conn_extra = get_db_connection()
+
+    def _safe_int(value, default):
+        try:
+            iv = int(value)
+            return iv if iv > 0 else int(default)
+        except Exception:
+            return int(default)
     
     weight_cfg = {
         'big_weight': 1.0, 'small_weight': 1.0, 
@@ -306,8 +287,8 @@ def _calculate_trend_weights(lottery_type: str = 'macaujc', dimensions: list = N
         'tail_weights': {}       # {尾数: 权重}
     }
     
-    if rows_10:
-        special_nums = [r[0] for r in rows_10]
+    if rows_30:
+        special_nums = [r[0] for r in rows_30]
         consecutive_big, consecutive_small = 0, 0
         consecutive_odd, consecutive_even = 0, 0
         
@@ -329,60 +310,112 @@ def _calculate_trend_weights(lottery_type: str = 'macaujc', dimensions: list = N
                 if consecutive_odd > 0: break
                 consecutive_even += 1
                 
-        # ======== 新增：识别交替单跳 (大-小-大-小 或 单-双-单-双) ========
-        def _get_alternating_jumps(nums, check_func):
-            """计算单跳(一十一负)的连续次数。check_func返回bool"""
-            jumps = 0
-            if len(nums) < 2: return 0
+        # ======== 新增：高级折线图模式识别 (1-2-1-2 / 天花板限制) ========
+        def _analyze_advanced_pattern(nums, check_func, current_consecutive, opposing_consecutive):
+            """
+            推演接下来一期顺势/逆势权重。
+            nums是倒序排列的(nums[0]为最新期)。
+            check_func 用来判别目标属性 (如 True=大, False=小)
+            返回: (target_weight_multiplier, opposite_weight_multiplier) -> 对应 current_state 和 反面
+            """
+            if len(nums) < 10: return 1.0, 1.0
             
-            # 从最近一期往前看，必须是 A-B-A-B 形式才算单跳
-            current_state = check_func(nums[0])
+            # 1. 提取连续段结构 RLE (Run-Length Encoding)，例如 ["大2", "小1", "大2", "小1"]
+            rle = []
+            curr_val = check_func(nums[0])
+            count = 1
             for i in range(1, len(nums)):
-                prev_state = check_func(nums[i])
-                if current_state != prev_state:
-                    jumps += 1
-                    current_state = prev_state
+                val = check_func(nums[i])
+                if val == curr_val:
+                    count += 1
                 else:
-                    # 只要出现连庄（非交替），单跳就此断掉
-                    break
-            return jumps
+                    rle.append((curr_val, count))
+                    curr_val = val
+                    count = 1
+            rle.append((curr_val, count))
+
+            # rle[0] 是最近结束的一段（或者正在进行中的一段）。
+            # 注意：如果正在连庄，rle[0] 的 count 可能就是 current_consecutive。
             
-        bs_jumps = _get_alternating_jumps(special_nums, lambda n: n >= 25)
-        oe_jumps = _get_alternating_jumps(special_nums, lambda n: n % 2 != 0)
+            last_state = check_func(nums[0]) # 最近一期的状态 (例如 大)
+            w_keep = 1.0  # 维持当前状态（继续连庄）的乘数
+            w_break = 1.0 # 改变状态（转向）的乘数
+
+            # 规则A1：近20期严格的"天花板壁垒"
+            # 比如连续近十几次跳变，从来没有超过2连。而当前已经2连了。
+            recent_20_streaks = [x[1] for x in rle[:10]] # 看大概20期的跳段
+            if len(recent_20_streaks) >= 4:
+                max_streak = max(recent_20_streaks)
+                # 假设历史上没有任何超过 2 连的，而当前正处于 2连，则极大概率要断掉(w_break暴增)
+                if current_consecutive >= max_streak and max_streak <= 3:
+                     # 历史最高就这么多，当前顶满天花板了
+                     w_break *= (2.0 + current_consecutive * 1.5)
+            
+            # 规则A2：均值回归防长龙长线
+            if current_consecutive == 3:
+                w_break *= 2.5
+            elif current_consecutive >= 4:
+                w_break *= (4.0 + (current_consecutive - 4) * 2.0)
+
+            # 规则B：重复宏观模式匹配 (比如 1-2-1-2 或 1-1-2-1-1-2)
+            # 通过匹配 RLE 数组的前面几项。
+            if len(rle) >= 5:
+                # 检查 `1-2-1-2` 类型跳动：当前可能是处于跳动的某一环
+                # 例如历史是 A1, B2, A1, B2... 此时最新的是 A(假设刚开1个A)。下个极大概率是B(形成B2)
                 
-        # 均值回归策略（强化版）：连出补偿与单跳防跳补偿
-        def _get_regression_weight(consecutive_count, is_alternating_jump=False, jumps_count=0):
-            # 基础连出断龙补偿
-            weight = 1.0
-            if consecutive_count <= 2:
-                weight = 1.0 + (consecutive_count * 0.2)
-            elif consecutive_count == 3:
-                weight = 2.5
-            elif consecutive_count >= 4:
-                weight = 4.0 + (consecutive_count - 4) * 1.5
+                # 提取数字特征
+                pattern_counts = [x[1] for x in rle] # 例：[1, 2, 1, 2, 1, 2]
                 
-            # 若处于高频单跳状态（例如：大小大大，已经跳了3次或以上）
-            # 则"防跳"权重猛增（即押注它会连庄，打断交替）
-            if is_alternating_jump and jumps_count >= 3:
-                # jumps_count 越大，越倾向于它停止跳。
-                # 由于这是应用在"上期开出属性"上的方法：
-                # 假设上期大，如果防跳，那这期必定也是大（连庄打断）。
-                # 所以我们给予上期同样属性一个成倍放大的权重。
-                return weight + (jumps_count * 1.0)
-                
-            return weight
-                
+                # 简单周期2检测: P0 应该对应 P2, P1 应该对应 P3
+                if len(pattern_counts) >= 4:
+                    if pattern_counts[1] == pattern_counts[3] and pattern_counts[1] > 0:
+                        # 形成周期重复。
+                        # 我们处于 rle[0]，正在累积 pattern_counts[0]
+                        target_count = pattern_counts[2] # 我们"应该"向这个目标靠拢
+                        
+                        if current_consecutive < target_count:
+                            # 还没达到该有的模式长度，非常可能继续连庄
+                            w_keep *= 2.5
+                        elif current_consecutive == target_count:
+                            # 刚好达到模式长度，非常可能在此断掉，转折
+                            w_break *= 3.0
+                        elif current_consecutive > target_count:
+                            # 已经打破模式，视为失效，正常均值回归叠加
+                            w_break *= 1.5
+                            
+                # 检查 1-1-1 单跳长龙
+                if all(c == 1 for c in pattern_counts[1:5]):
+                    # 历史单跳了4次！
+                    if current_consecutive == 1:
+                        # 当前处于新状态第1个，下个应该转为打断单跳(连庄)还是继续单跳？
+                        # 用户常有"防跳"心理，即单跳太久必有连。
+                        w_keep *= 2.5 # 押注它连庄(防跳)
+                    elif current_consecutive >= 2:
+                        w_keep *= 1.2
+            
+            return w_keep, w_break
+
         if 'big_small' in dimensions:
             last_is_big = special_nums[0] >= 25 if special_nums else False
-            # 对于【大】的权重：
-            # 若长龙连小，大应该爆发；若正在单跳且前一期是【大】，大也应该爆发（防跳即连庄）。
-            weight_cfg['big_weight'] = _get_regression_weight(consecutive_small, last_is_big, bs_jumps)
-            weight_cfg['small_weight'] = _get_regression_weight(consecutive_big, not last_is_big, bs_jumps)
+            w_keep, w_break = _analyze_advanced_pattern(special_nums, lambda n: n >= 25, consecutive_big if last_is_big else consecutive_small, consecutive_small if last_is_big else consecutive_big)
+            
+            if last_is_big:
+                weight_cfg['big_weight'] = w_keep
+                weight_cfg['small_weight'] = w_break
+            else:
+                weight_cfg['small_weight'] = w_keep
+                weight_cfg['big_weight'] = w_break
             
         if 'odd_even' in dimensions:
             last_is_odd = special_nums[0] % 2 != 0 if special_nums else False
-            weight_cfg['odd_weight'] = _get_regression_weight(consecutive_even, last_is_odd, oe_jumps)
-            weight_cfg['even_weight'] = _get_regression_weight(consecutive_odd, not last_is_odd, oe_jumps)
+            w_keep, w_break = _analyze_advanced_pattern(special_nums, lambda n: n % 2 != 0, consecutive_odd if last_is_odd else consecutive_even, consecutive_even if last_is_odd else consecutive_odd)
+            
+            if last_is_odd:
+                weight_cfg['odd_weight'] = w_keep
+                weight_cfg['even_weight'] = w_break
+            else:
+                weight_cfg['even_weight'] = w_keep
+                weight_cfg['odd_weight'] = w_break
 
     # ====== 修改：生肖马尔可夫链状态转移推演 ======
     if 'markov' in dimensions:
@@ -392,61 +425,120 @@ def _calculate_trend_weights(lottery_type: str = 'macaujc', dimensions: list = N
 
     # ====== 修改：冷热频率完全特码化 ======
     if 'hot_cold' in dimensions:
-        hc_p = periods_cfg.get('hot_cold', 100)
-        rows_hc = conn_extra.execute(
-            f"SELECT special_num FROM lottery_history WHERE lottery_type=? ORDER BY draw_date DESC, draw_number DESC LIMIT {hc_p}",
+        hc_p = _safe_int(periods_cfg.get('hot_cold', 100), 100)
+        
+        # 为了计算真实的极值遗漏，我们需要全量数据（或者至少一个极大的窗口比如 1000 期），而不是被 hc_p 截断的数据
+        all_rows = conn_extra.execute(
+            "SELECT special_num FROM lottery_history WHERE lottery_type=? ORDER BY draw_date DESC, draw_number DESC",
             (lottery_type,)
         ).fetchall()
+        
+        # 频率统计仅限于用户要求的期数 (hc_p)
+        rows_hc = all_rows[:hc_p]
+        
         if rows_hc:
             num_freq = Counter()
+            # 从全量数据中计算每个号码的真实遗漏深度
+            omissions = {n: len(all_rows) for n in range(1, 50)}
+            
+            for idx, row in enumerate(all_rows):
+                n = row[0]
+                if 1 <= n <= 49:
+                    if omissions[n] == len(all_rows):
+                        omissions[n] = idx
+                        
+            # 计算期数内的出现频率
             for row in rows_hc:
                 n = row[0]
                 if 1 <= n <= 49:
                     num_freq[n] += 1
+                    
+            # 找出全场所有号码中的真实最大遗漏
+            max_omission = max(omissions.values())
+            
             avg_freq = sum(num_freq.values()) / 49 if num_freq else 1
+            
             for n in range(1, 50):
                 f = num_freq.get(n, 0)
+                base_w = 1.0
+                
                 # 均值回归：冷号加权，热号轻微加权
                 if avg_freq > 0:
                     ratio = f / avg_freq
                     if ratio < 0.5:
-                        weight_cfg['hot_cold_weights'][n] = 1.6  # 极冷号大幅提权
+                        base_w = 1.6  # 极冷号大幅提权
                     elif ratio < 0.8:
-                        weight_cfg['hot_cold_weights'][n] = 1.3  # 冷号适度提权
+                        base_w = 1.3  # 冷号适度提权
                     elif ratio > 1.5:
-                        weight_cfg['hot_cold_weights'][n] = 0.85 # 极热号轻微降权
+                        base_w = 0.85 # 极热号轻微降权
                     else:
-                        weight_cfg['hot_cold_weights'][n] = 1.0 + (ratio - 1) * 0.15
+                        base_w = 1.0 + (ratio - 1) * 0.15
+                        
+                # ====== 新增：最大遗漏数字（大冷门）极值突破补正 ======
+                if omissions[n] == max_omission and max_omission > 5: 
+                    # 如果该数字是全场最冷（憋了最久），给予成倍的触底爆发概率
+                    bonus_multiplier = 1.0 + (max_omission / hc_p) * 2.5 # 随遗漏深度动态拉升，最高可达 x3.5
+                    base_w *= bonus_multiplier
+                    
+                weight_cfg['hot_cold_weights'][n] = base_w
 
-    # ====== 新增：尾数分布加权 ======
+    # ====== 新增：尾数分布加权 (含真实最大遗漏) ======
     if 'tail' in dimensions:
-        tail_p = periods_cfg.get('tail', 50)
-        rows_tail = conn_extra.execute(
-            f"SELECT special_num FROM lottery_history WHERE lottery_type=? ORDER BY draw_date DESC, draw_number DESC LIMIT {tail_p}",
+        tail_p = _safe_int(periods_cfg.get('tail', 50), 50)
+        
+        all_rows_tail = conn_extra.execute(
+            "SELECT special_num FROM lottery_history WHERE lottery_type=? ORDER BY draw_date DESC, draw_number DESC",
             (lottery_type,)
         ).fetchall()
+        
+        rows_tail = all_rows_tail[:tail_p]
+        
         if rows_tail:
             tail_freq = Counter()
+            tail_omissions = {t: len(all_rows_tail) for t in range(10)}
+            
+            for idx, r in enumerate(all_rows_tail):
+                t = r[0] % 10
+                if tail_omissions[t] == len(all_rows_tail):
+                    tail_omissions[t] = idx
+            
             for r in rows_tail:
-                tail_freq[r[0] % 10] += 1
+                t = r[0] % 10
+                tail_freq[t] += 1
+                    
+            max_tail_omission = max(tail_omissions.values())
             avg_tail = sum(tail_freq.values()) / 10 if tail_freq else 1
+            
             for tail in range(10):
                 f = tail_freq.get(tail, 0)
+                base_w = 1.0
+                
                 if avg_tail > 0:
                     ratio = f / avg_tail
                     if ratio < 0.6:
-                        weight_cfg['tail_weights'][tail] = 1.4
+                        base_w = 1.4
                     elif ratio > 1.4:
-                        weight_cfg['tail_weights'][tail] = 0.85
+                        base_w = 0.85
                     else:
-                        weight_cfg['tail_weights'][tail] = 1.0
+                        base_w = 1.0
+                        
+                # ====== 最大遗漏尾数爆拉补正 ======
+                if tail_omissions[tail] == max_tail_omission and max_tail_omission > 3:
+                    tail_bonus = 1.0 + (max_tail_omission / tail_p) * 2.0
+                    base_w *= tail_bonus
+                    
+                weight_cfg['tail_weights'][tail] = base_w
 
     # ====== 新增：深层算法 (连涨拐点, 贝叶斯与 LSTM, 波色极值) 直接调用 engine.py 免得重复写 ======
     if any(k in dimensions for k in ('bayesian', 'lstm', 'consecutive', 'color')):
         import pandas as pd
         from modules.statistics_engine import bayesian_inference, lstm_simulation, zodiac_momentum_analysis, color_hot_cold_analysis, get_zodiac_mapping as ge_z
         z_map_local = ge_z(lottery_type)
-        df_all = pd.read_sql_query(f"SELECT special_num FROM lottery_history WHERE lottery_type='{lottery_type}' ORDER BY draw_date DESC, draw_number DESC LIMIT 200", conn_extra)
+        df_all = pd.read_sql_query(
+            "SELECT special_num FROM lottery_history WHERE lottery_type=? ORDER BY draw_date DESC, draw_number DESC LIMIT ?",
+            conn_extra,
+            params=(lottery_type, 200)
+        )
         
         if 'bayesian' in dimensions:
             b_data = bayesian_inference(df_all, z_map_local, periods_cfg.get('bayesian', 100))
@@ -460,9 +552,14 @@ def _calculate_trend_weights(lottery_type: str = 'macaujc', dimensions: list = N
             # score 0-100
             weight_cfg['lstm_weights'] = {d['zodiac']: 0.5 + (d['score']/100)*1.0 for d in l_data}
             
+        # 共享 consecutive 的结果，避免对 simulator.py 外暴露过多。
+        color_momentum_boosts = None
+        
         if 'consecutive' in dimensions:
             c_data = zodiac_momentum_analysis(df_all, z_map_local)
             rev_prob = c_data.get('reversal_probability', 0)
+            color_momentum_boosts = c_data.get('color_momentum_boosts', None)
+            
             if rev_prob >= 50:
                 cw = {}
                 target_dir = c_data.get('reversal_target_direction', 'none')
@@ -478,16 +575,28 @@ def _calculate_trend_weights(lottery_type: str = 'macaujc', dimensions: list = N
 
         if 'color' in dimensions:
             color_data = color_hot_cold_analysis(df_all, periods_cfg.get('hot_cold', 100))
-            # 极端度 0-100 转化为权重 (1.0 -> 2.5)
+            # 极端度 0-100 转化为基础权重 (1.0 -> 2.5)
             weight_cfg['color_weights'] = {d['color']: 1.0 + (d['extremity'] / 100.0) * 1.5 for d in color_data}
+            
+            # ====== 新增：融合来自路单引擎（150期）观测到的模式波色修正 ======
+            if color_momentum_boosts:
+                if '红' in weight_cfg['color_weights']: 
+                    weight_cfg['color_weights']['红'] *= color_momentum_boosts.get('red', 1.0)
+                if '蓝' in weight_cfg['color_weights']: 
+                    weight_cfg['color_weights']['蓝'] *= color_momentum_boosts.get('blue', 1.0)
+                if '绿' in weight_cfg['color_weights']: 
+                    weight_cfg['color_weights']['绿'] *= color_momentum_boosts.get('green', 1.0)
 
     conn_extra.close()
     return weight_cfg
 
 
-def _weighted_random_number(weights_config: dict, z_map: dict, is_special: bool = False) -> int:
+def _weighted_random_number(weights_config: dict, z_map: dict, is_special: bool = False, exclude_nums: set = None) -> int:
     """结合走势与生肖权重生成单个号码（1-49）"""
     candidates = list(range(1, 50))
+    if exclude_nums:
+        candidates = [n for n in candidates if n not in exclude_nums]
+        
     weights = []
     
     for num in candidates:
@@ -531,14 +640,8 @@ def _weighted_random_number(weights_config: dict, z_map: dict, is_special: bool 
                 
             # 叠加波色权重
             if 'color_weights' in weights_config:
-                color = None
-                red = {1, 2, 7, 8, 12, 13, 18, 19, 23, 24, 29, 30, 34, 35, 40, 45, 46}
-                blue = {3, 4, 9, 10, 14, 15, 20, 25, 26, 31, 36, 37, 41, 42, 47, 48}
-                green = {5, 6, 11, 16, 17, 21, 22, 27, 28, 32, 33, 38, 39, 43, 44, 49}
-                if num in red: color = '红波'
-                elif num in blue: color = '蓝波'
-                elif num in green: color = '绿波'
-                if color and color in weights_config['color_weights']:
+                color = get_color(num)  # 来自 modules.constants
+                if color and color != '未知' and color in weights_config['color_weights']:
                     w *= weights_config['color_weights'][color]
                 
         # 冷热权重（现在变为仅针对特码有效）
@@ -560,13 +663,13 @@ def simulate_single(lottery_type: str = 'macaujc', dimensions: list = None) -> d
     
     numbers_set = set()
     while len(numbers_set) < 6:
-        # 正码不仅应用冷热权重，还要确保不重复（在实际开奖中，同一期正码不重复）
-        num = _weighted_random_number(weights_config, z_map, is_special=False)
+        # 正码纯随机生成（确保不重复）
+        num = _weighted_random_number(weights_config, z_map, is_special=False, exclude_nums=numbers_set)
         numbers_set.add(num)
         
     numbers = sorted(list(numbers_set))
-    # 特码应用全部维度权重
-    special_num = _weighted_random_number(weights_config, z_map, is_special=True)
+    # 特码应用全部图表与趋势权重，并排除已抽出的正码
+    special_num = _weighted_random_number(weights_config, z_map, is_special=True, exclude_nums=numbers_set)
     
     return {
         'numbers': numbers,
@@ -592,10 +695,10 @@ def simulate_batch(count: int = 10, lottery_type: str = 'macaujc', dimensions: l
     for _ in range(count):
         numbers_set = set()
         while len(numbers_set) < 6:
-            numbers_set.add(_weighted_random_number(weights_config, z_map, is_special=False))
+            numbers_set.add(_weighted_random_number(weights_config, z_map, is_special=False, exclude_nums=numbers_set))
             
         numbers = sorted(list(numbers_set))
-        special_num = _weighted_random_number(weights_config, z_map, is_special=True)
+        special_num = _weighted_random_number(weights_config, z_map, is_special=True, exclude_nums=numbers_set)
         
         draws.append({
             'numbers': numbers,

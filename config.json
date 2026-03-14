@@ -1,8 +1,30 @@
 {
   "ai": {
-    "platform": "google",
-    "model": "gemini-3-pro-preview",
-    "api_key": "AIzaSyCNqfB6cErVYkbmOGeTbmf1OQJo-ykpoUg"
+    "platform": "local",
+    "model": "gpt-5.4",
+    "api_key": "",
+    "api_base": "http://127.0.0.1:8317/v1",
+    "platforms": ["local", "nvidia", "google", "openai", "deepseek", "qwen", "glm", "minimax"],
+    "models": {
+      "local": [
+        "gpt-5.4",
+        "z-ai/glm4.7",
+        "gpt-5.2"
+      ],
+      "nvidia": [
+        "llama-3.1-405b-instruct",
+        "minimaxai/minimax-m2.5",
+        "qwen3.5-122b-a10b",
+        "z-ai/glm4.7",
+        "z-ai/glm5"
+      ],
+      "google": ["gemini-2.5-pro", "gemini-2.5-flash"],
+      "openai": ["gpt-4o", "gpt-4o-mini"],
+      "deepseek": ["deepseek-chat", "deepseek-reasoner"],
+      "qwen": ["qwen-max", "qwen-plus", "qwen-turbo"],
+      "glm": ["glm-4-plus", "glm-4-air", "glm-4-flash"],
+      "minimax": ["minimax-chat", "abab6.5-chat"]
+    }
   },
   "chart_periods": {
     "zodiac_trend": 200,
@@ -14,5 +36,15 @@
     "bayesian": 90,
     "lstm": 2113,
     "ai_raw_data": 300
+  },
+  "system": {
+    "signup_bonus_points": 20,
+    "ai_sim_cost": 5,
+    "settings_change_cost": 1,
+    "share_reward_points": 10,
+    "share_reward_ratio": 0.2,
+    "share_recharge_min": 5,
+    "points_per_yuan": 10,
+    "vip_monthly_fee": 20
   }
 }

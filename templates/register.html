@@ -224,6 +224,23 @@
             font-size: 0.82rem;
         }
     </style>
+
+    <!-- CSRF Token Global Setup -->
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <script>
+        const originalFetch = window.fetch;
+        window.fetch = async function(resource, config) {
+            config = config || {};
+            const method = (config.method || 'GET').toUpperCase();
+            if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+                config.headers = {
+                    ...config.headers,
+                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content
+                };
+            }
+            return originalFetch(resource, config);
+        };
+    </script>
 </head>
 
 <body>
@@ -286,6 +303,8 @@
             const username = document.getElementById('username').value.trim();
             const password = document.getElementById('password').value;
             const password2 = document.getElementById('password2').value;
+            const params = new URLSearchParams(window.location.search);
+            const refCode = params.get('ref') || '';
 
             if (password !== password2) {
                 showError('两次输入的密码不一致');
@@ -298,7 +317,7 @@
                 const res = await fetch('/api/auth/register', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
+                    body: JSON.stringify({ username, password, ref_code: refCode })
                 });
                 const data = await res.json();
                 if (data.success) {
