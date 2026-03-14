@@ -9,3 +9,6 @@ scikit-learn>=1.4.0
 PyJWT>=2.3.0
 Flask-WTF==1.2.1
 cryptography>=42.0.0
+
+pytest>=8.0.0
+pytest-cov>=4.1.0
