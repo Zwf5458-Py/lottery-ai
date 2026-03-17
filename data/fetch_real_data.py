@@ -21,13 +21,13 @@ logger = get_logger()
 
 # 创建不验证证书的 SSL 上下文（解决部分环境 SSL 握手失败问题）
 ssl_context = ssl.create_default_context()
-if os.environ.get('INSECURE_SSL', '0') == '1':
+if os.environ.get("INSECURE_SSL", "0") == "1":
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
 
 # 数据库路径
 DB_DIR = os.path.dirname(__file__)
-DB_PATH = os.path.join(DB_DIR, 'lottery.db')
+DB_PATH = os.path.join(DB_DIR, "lottery.db")
 
 # API 基础 URL
 API_BASE = "https://history.macaumarksix.com/history/macaujc/y/{year}"
@@ -37,10 +37,7 @@ START_YEAR = 2011
 END_YEAR = 2026
 
 # 彩种配置
-LOTTERY_TYPES = {
-    'macaujc': '澳门六合彩',
-    'macaujc2': '新澳门六合彩'
-}
+LOTTERY_TYPES = {"macaujc": "澳门六合彩", "macaujc2": "新澳门六合彩"}
 
 
 def create_database():
@@ -49,7 +46,7 @@ def create_database():
     cursor = conn.cursor()
 
     # 如果表不存在则创建
-    cursor.execute('''
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS lottery_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             lottery_type TEXT NOT NULL DEFAULT 'macaujc', -- 彩种
@@ -65,10 +62,10 @@ def create_database():
             wave TEXT,                            -- 波色
             zodiac TEXT                           -- 生肖
         )
-    ''')
-    
+    """)
+
     # 建立一个单独用于记录 AI 模拟分析结果的表
-    cursor.execute('''
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS ai_analysis_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             lottery_type TEXT NOT NULL,          -- 针对哪个彩种
@@ -77,12 +74,16 @@ def create_database():
             dimensions TEXT NOT NULL,            -- 参考的维度 JSON
             result_json TEXT NOT NULL            -- 完整结果包含号码、分析文本等 JSON
         )
-    ''')
-    
+    """)
+
     # 尝试创建索引
     try:
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_lottery_type ON lottery_history(lottery_type)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_lottery_type_date ON lottery_history(lottery_type, draw_date DESC, draw_number DESC)")
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_lottery_type ON lottery_history(lottery_type)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_lottery_type_date ON lottery_history(lottery_type, draw_date DESC, draw_number DESC)"
+        )
     except Exception:
         pass
 
@@ -90,7 +91,105 @@ def create_database():
     return conn
 
 
-def fetch_year_data(year: int, lottery_type: str = 'macaujc', max_retries: int = 3) -> list:
+# API 基础 URL (备用数据源)
+API_BASE = "https://history.macaumarksix.com/history/macaujc/y/{year}"
+
+# 备用数据源，以防主数据源不可用
+BACKUP_API_BASE = "https://history.macaumarksix.com/history/macaujc2/y/{year}"
+
+
+# 如果主源不可用，尝试备用源
+def fetch_year_data_with_fallback(
+    year: int, lottery_type: str = "macaujc", max_retries: int = 3
+) -> list:
+    """
+    从 API 获取指定年份的全部开奖数据（带重试机制和备用数据源）
+    参数:
+        year: 年份 (如 2024)
+        lottery_type: 彩种 (macaujc 或 macaujc2)
+        max_retries: 最大重试次数
+    返回: 开奖记录列表
+    """
+    primary_url = API_BASE.replace("macaujc", lottery_type).format(year=year)
+    backup_url = BACKUP_API_BASE.replace("macaujc2", lottery_type).format(year=year)
+
+    urls_to_try = [primary_url]
+    if primary_url != backup_url:  # 如果两个 URL 不一样才加备用
+        urls_to_try.append(backup_url)
+
+    for url in urls_to_try:
+        for attempt in range(max_retries):
+            try:
+                req = urllib.request.Request(
+                    url,
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                        "Referer": "https://macaujc.com/",
+                        "Origin": "https://macaujc.com",
+                        "Accept": "application/json, text/plain, */*",
+                        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+                        "Accept-Encoding": "gzip, deflate, br",
+                        "Connection": "keep-alive",
+                    },
+                )
+                with urllib.request.urlopen(
+                    req, timeout=30, context=ssl_context
+                ) as response:
+                    data = json.loads(response.read().decode("utf-8"))
+
+                if data.get("result") and data.get("data"):
+                    logger.info(
+                        f"  ✅ 从 {url} 成功获取 {year} 年数据 ({len(data['data'])} 条记录)"
+                    )
+                    return data["data"]
+                else:
+                    logger.warning(f"  ⚠️  {year} 年数据为空或请求失败 (URL: {url})")
+                    # 尝试不同的响应格式
+                    if "data" in data and isinstance(data["data"], list):
+                        logger.info(
+                            f"  ✅ 从 {url} 成功获取 {year} 年数据 ({len(data['data'])} 条记录)"
+                        )
+                        return data["data"]
+                    return []
+
+            except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    logger.warning(f"  ⚠️  {year} 年 URL 不存在 (URL: {url}): {e}")
+                    break  # 立即尝试下一个 URL
+                elif attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 2
+                    logger.info(
+                        f"  ⏳ 重试 ({attempt + 1}/{max_retries}) URL: {url}..."
+                    )
+                    time.sleep(wait_time)
+                else:
+                    logger.warning(f"  ⚠️  {url} 请求失败: {e}")
+
+            except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                logger.error(f"  ❌ {year} 年数据解析失败 (URL: {url}): {e}")
+                break  # 解析错误不需要重试
+
+            except ssl.SSLError as e:
+                logger.error(f"  ❌ SSL 错误 (URL: {url}): {e}")
+                break  # SSL 错误不需要重试
+
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 2
+                    logger.info(f"  ⏳ 其他错误 ({attempt + 1}/{max_retries}) {e}")
+                    time.sleep(wait_time)
+                else:
+                    logger.error(f"  ❌ 意外错误 (URL: {url}): {e}")
+                    break
+
+    # 如果所有 URL 都失败，返回空列表
+    logger.warning(f"  ❌ 所有数据源都无法获取 {year} 年数据，返回空数据")
+    return []
+
+
+def fetch_year_data(
+    year: int, lottery_type: str = "macaujc", max_retries: int = 3
+) -> list:
     """
     从 API 获取指定年份的全部开奖数据（带重试机制）
     参数:
@@ -99,38 +198,7 @@ def fetch_year_data(year: int, lottery_type: str = 'macaujc', max_retries: int =
         max_retries: 最大重试次数
     返回: 开奖记录列表
     """
-    url = API_BASE.replace('macaujc', lottery_type).format(year=year)
-
-    for attempt in range(max_retries):
-        try:
-            req = urllib.request.Request(
-                url,
-                headers={
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                    'Referer': 'https://macaujc.com/',
-                    'Origin': 'https://macaujc.com'
-                }
-            )
-            with urllib.request.urlopen(req, timeout=30, context=ssl_context) as response:
-                data = json.loads(response.read().decode('utf-8'))
-
-            if data.get('result') and data.get('data'):
-                return data['data']
-            else:
-                logger.warning(f"  ⚠️  {year} 年数据为空或请求失败")
-                return []
-
-        except (urllib.error.URLError, ConnectionError, TimeoutError) as e:
-            if attempt < max_retries - 1:
-                wait_time = (attempt + 1) * 2
-                logger.info(f"  ⏳ 重试 ({attempt+1}/{max_retries})...")
-                time.sleep(wait_time)
-            else:
-                logger.error(f"  ❌ {year} 年请求失败 ({max_retries}次重试后): {e}")
-                return []
-        except json.JSONDecodeError:
-            logger.error(f"  ❌ {year} 年数据解析失败")
-            return []
+    return fetch_year_data_with_fallback(year, lottery_type, max_retries)
 
 
 def parse_record(record: dict) -> tuple:
@@ -144,12 +212,12 @@ def parse_record(record: dict) -> tuple:
         zodiac: "虎,龍,牛,雞,牛,猴,雞"
     """
     try:
-        draw_number = record['expect']
-        open_time = record['openTime']
-        draw_date = open_time.split(' ')[0]  # 只取日期部分
+        draw_number = record["expect"]
+        open_time = record["openTime"]
+        draw_date = open_time.split(" ")[0]  # 只取日期部分
 
         # 解析号码
-        codes = record['openCode'].split(',')
+        codes = record["openCode"].split(",")
         numbers = [int(c) for c in codes]
 
         if len(numbers) != 7:
@@ -160,11 +228,22 @@ def parse_record(record: dict) -> tuple:
         special_num = numbers[6]
 
         # 波色和生肖
-        wave = record.get('wave', '')
-        zodiac = record.get('zodiac', '')
+        wave = record.get("wave", "")
+        zodiac = record.get("zodiac", "")
 
-        return (draw_number, draw_date, num1, num2, num3, num4, num5, num6,
-                special_num, wave, zodiac)
+        return (
+            draw_number,
+            draw_date,
+            num1,
+            num2,
+            num3,
+            num4,
+            num5,
+            num6,
+            special_num,
+            wave,
+            zodiac,
+        )
 
     except (KeyError, ValueError, IndexError) as e:
         return None
@@ -182,9 +261,9 @@ def fetch_all_data():
     for lottery_type, type_name in LOTTERY_TYPES.items():
         total_count = 0
         failed_years = []
-        
+
         logger.info(f"[{type_name} ({lottery_type})]")
-        
+
         for year in range(START_YEAR, END_YEAR + 1):
             logger.info(f"📥 正在抓取 {year} 年数据...")
 
@@ -201,17 +280,20 @@ def fetch_all_data():
                 if parsed:
                     # 检查是否已存在 (避免重复运行脚本导致加倍，但不按 draw_number 单独去重)
                     exists = cursor.execute(
-                        "SELECT 1 FROM lottery_history WHERE lottery_type=? AND draw_number=?", 
-                        (lottery_type, parsed[0])
+                        "SELECT 1 FROM lottery_history WHERE lottery_type=? AND draw_number=?",
+                        (lottery_type, parsed[0]),
                     ).fetchone()
-                    
+
                     if not exists:
-                        cursor.execute('''
+                        cursor.execute(
+                            """
                             INSERT INTO lottery_history
                             (lottery_type, draw_number, draw_date, num1, num2, num3, num4, num5, num6,
                              special_num, wave, zodiac)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        ''', (lottery_type,) + parsed)
+                        """,
+                            (lottery_type,) + parsed,
+                        )
                         year_count += 1
 
             conn.commit()
@@ -227,35 +309,41 @@ def fetch_all_data():
 
     conn.close()
 
-    logger.info("="*50)
+    logger.info("=" * 50)
     logger.info("✅ 所有数据抓取及同步完毕！")
     logger.info(f"📁 数据库位置: {DB_PATH}")
-    logger.info("="*50)
+    logger.info("=" * 50)
 
 
-def check_data_freshness(lottery_type: str = 'macaujc2') -> dict:
+def check_data_freshness(lottery_type: str = "macaujc2") -> dict:
     """
     检查本地数据库中指定彩种的最新数据日期，与当前日期对比。
     返回: {'is_fresh': bool, 'latest_date': str, 'latest_draw': str, 'days_behind': int}
     """
     from datetime import datetime, timedelta
+
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    
+
     row = cursor.execute(
         "SELECT draw_date, draw_number FROM lottery_history WHERE lottery_type=? ORDER BY draw_date DESC, draw_number DESC LIMIT 1",
-        (lottery_type,)
+        (lottery_type,),
     ).fetchone()
     conn.close()
-    
+
     if not row:
-        return {'is_fresh': False, 'latest_date': '无数据', 'latest_draw': '无', 'days_behind': 999}
-    
+        return {
+            "is_fresh": False,
+            "latest_date": "无数据",
+            "latest_draw": "无",
+            "days_behind": 999,
+        }
+
     latest_date_str = row[0]
     latest_draw = row[1]
-    
+
     try:
-        latest_date = datetime.strptime(latest_date_str, '%Y-%m-%d')
+        latest_date = datetime.strptime(latest_date_str, "%Y-%m-%d")
         today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         # 若最新数据日期是昨天或今天，视为已同步
         days_behind = (today - latest_date).days
@@ -263,57 +351,64 @@ def check_data_freshness(lottery_type: str = 'macaujc2') -> dict:
     except:
         days_behind = 999
         is_fresh = False
-    
+
     return {
-        'is_fresh': is_fresh,
-        'latest_date': latest_date_str,
-        'latest_draw': latest_draw,
-        'days_behind': days_behind
+        "is_fresh": is_fresh,
+        "latest_date": latest_date_str,
+        "latest_draw": latest_draw,
+        "days_behind": days_behind,
     }
 
 
-def sync_latest(lottery_type: str = 'macaujc2') -> dict:
+def sync_latest(lottery_type: str = "macaujc2") -> dict:
     """
     增量同步指定彩种的最新数据（只抓取当年）
     返回: {'success': bool, 'new_count': int, 'message': str}
     """
     from datetime import datetime
-    
+
     year = datetime.now().year
     logger.info(f"🔄 增量同步 {lottery_type} {year}年最新数据...")
-    
+
     conn = create_database()
     cursor = conn.cursor()
-    
+
     records = fetch_year_data(year, lottery_type)
     if not records:
         conn.close()
-        return {'success': False, 'new_count': 0, 'message': f'{year}年暂无新数据'}
-    
+        return {"success": False, "new_count": 0, "message": f"{year}年暂无新数据"}
+
     new_count = 0
     for record in records:
         parsed = parse_record(record)
         if parsed:
             exists = cursor.execute(
                 "SELECT 1 FROM lottery_history WHERE lottery_type=? AND draw_number=?",
-                (lottery_type, parsed[0])
+                (lottery_type, parsed[0]),
             ).fetchone()
             if not exists:
-                cursor.execute('''
+                cursor.execute(
+                    """
                     INSERT INTO lottery_history
                     (lottery_type, draw_number, draw_date, num1, num2, num3, num4, num5, num6,
                      special_num, wave, zodiac)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (lottery_type,) + parsed)
+                """,
+                    (lottery_type,) + parsed,
+                )
                 new_count += 1
-    
+
     conn.commit()
     conn.close()
-    
-    msg = f'同步完成！新增 {new_count} 期数据' if new_count > 0 else '数据已是最新，无需同步'
+
+    msg = (
+        f"同步完成！新增 {new_count} 期数据"
+        if new_count > 0
+        else "数据已是最新，无需同步"
+    )
     logger.info(f"✅ {msg}")
-    return {'success': True, 'new_count': new_count, 'message': msg}
+    return {"success": True, "new_count": new_count, "message": msg}
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     fetch_all_data()
