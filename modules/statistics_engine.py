@@ -1018,6 +1018,46 @@ def color_hot_cold_analysis(df: pd.DataFrame, periods: int = 100) -> dict:
     return result
 
 
+def calculate_omission_thresholds(df: pd.DataFrame, lottery_type: str = 'macaujc', zone: int = 1) -> dict:
+    if lottery_type == 'weilitsai':
+        max_num = 38 if zone == 1 else 8
+        cols = ['n1', 'n2', 'n3', 'n4', 'n5', 'n6'] if zone == 1 else ['special']
+    else:
+        max_num = 49
+        cols = ['num1', 'num2', 'num3', 'num4', 'num5', 'num6', 'special_num'] if zone == 1 else ['special_num']
+
+    df_sorted = df.sort_values(by=['draw_date', 'draw_number'], ascending=[True, True])
+    arr = df_sorted[cols].values.astype(int) if set(cols).issubset(df_sorted.columns) else np.array([])
+
+    thresholds = {}
+    for num in range(1, max_num + 1):
+        if arr.size == 0:
+            thresholds[num] = {'max_omission': 0, 'current_omission': 0, 'is_alert': False}
+            continue
+
+        hits = np.where((arr == num).any(axis=1))[0]
+        if len(hits) == 0:
+            omission = len(arr)
+            max_omi = len(arr)
+        else:
+            gaps = [hits[0]]
+            for i in range(1, len(hits)):
+                gaps.append(hits[i] - hits[i - 1] - 1)
+            current_omi = len(arr) - 1 - hits[-1]
+            gaps.append(current_omi)
+
+            max_omi = max(gaps) if gaps else 0
+            omission = current_omi
+
+        thresholds[num] = {
+            'max_omission': int(max_omi),
+            'current_omission': int(omission),
+            'is_alert': int(omission) >= int(max_omi * 0.8) and int(max_omi) > 5
+        }
+
+    return thresholds
+
+
 def get_full_analysis(lottery_type: str = 'macaujc') -> dict:
     """
     汇总所有统计维度，一次性返回给前端

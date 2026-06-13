@@ -3,6 +3,7 @@
 """
 
 import pytest
+import pandas as pd
 from modules.statistics_engine import (
     _get_five_element,
     _chi_square_p_value,
@@ -12,6 +13,7 @@ from modules.statistics_engine import (
     odd_even_ratio,
     big_small_ratio,
     tail_number_stats,
+    calculate_omission_thresholds,
 )
 
 
@@ -196,3 +198,22 @@ class TestTailNumberStats:
         for t in range(10):
             assert t in result["distribution"]
             assert t in result["omission"]
+
+
+class TestOmissionThresholds:
+    def test_calculate_omission_thresholds(self):
+        df = pd.DataFrame({
+            'draw_date': pd.date_range(start='1/1/2023', periods=18),
+            'draw_number': range(1, 19),
+            'n1': [1] + [2]*8 + [1] + [2]*8,
+            'n2': [3]*18, 'n3': [4]*18, 'n4': [5]*18, 'n5': [6]*18, 'n6': [7]*18,
+            'special': [8]*18
+        })
+        
+        thresholds = calculate_omission_thresholds(df, lottery_type='weilitsai', zone=1)
+        
+        assert 1 in thresholds
+        assert thresholds[1]['max_omission'] == 8
+        assert thresholds[1]['current_omission'] == 8
+        assert thresholds[1]['is_alert'] is True
+        assert thresholds[2]['is_alert'] is False
