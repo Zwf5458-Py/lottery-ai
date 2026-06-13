@@ -311,6 +311,11 @@ function initLotteryTypeSelector() {
 
 function updateUIForLotteryType() {
     const isWeilitsai = state.lotteryType === 'weilitsai';
+    
+    const specialCol = document.getElementById('history-special-col');
+    if (specialCol) {
+        specialCol.textContent = isWeilitsai ? '第二區' : '特码';
+    }
     const zodiacCharts = [
         'chart-card-zodiac', 
         'chart-card-markov', 
@@ -2140,7 +2145,7 @@ function renderBallsHtml(numbers, zodiacs, specialNum, specialZodiac, extraClass
     
     // Add Zone 1 Label if Weilitsai
     if (state.lotteryType === 'weilitsai') {
-        html += `<div style="display:inline-flex;flex-direction:column;align-items:center;margin-right:10px;"><span style="font-size:0.8rem;color:#888;">第一區</span></div>`;
+        html += `<div style="display:inline-flex;flex-direction:column;align-items:center;margin-right:10px;"><span style="font-size:0.8rem;color:#888;">第一區 (Zone 1)</span></div>`;
     }
     
     numbers.forEach((n, i) => {
@@ -2155,7 +2160,7 @@ function renderBallsHtml(numbers, zodiacs, specialNum, specialZodiac, extraClass
     
     // Add Zone 2 Label if Weilitsai
     if (state.lotteryType === 'weilitsai') {
-        html += `<div style="display:inline-flex;flex-direction:column;align-items:center;margin-right:10px;"><span style="font-size:0.8rem;color:#888;">第二區</span></div>`;
+        html += `<div style="display:inline-flex;flex-direction:column;align-items:center;margin-right:10px;"><span style="font-size:0.8rem;color:#888;">第二區 (Zone 2)</span></div>`;
     }
     
     const spColorClass = getBallColorClass(specialNum, 2);
