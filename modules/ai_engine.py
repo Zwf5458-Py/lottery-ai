@@ -739,7 +739,7 @@ def _build_zodiac_prompt(stats: dict, lottery_type: str, dimensions: list) -> st
         from modules.statistics_engine import get_zodiac_mapping
         
         z_map = get_zodiac_mapping(lottery_type)
-        ai_raw_p = get_chart_periods().get('ai_raw_data', 300)
+        ai_raw_p = get_chart_periods(lottery_type=lottery_type).get('ai_raw_data', 300)
         conn = get_db_connection()
         rows = conn.execute(
             f"SELECT draw_number, special_num FROM lottery_history WHERE lottery_type=? ORDER BY draw_date DESC, draw_number DESC LIMIT {ai_raw_p}",
@@ -879,7 +879,7 @@ def _build_analysis_prompt(stats: dict, lottery_type: str, dimensions: list, pre
         
         from modules.config_manager import get_chart_periods
         # 生肖预测无需三百期宏观冷热记录，取近 50 期以节约 Token
-        ai_raw_p = min(50, get_chart_periods().get('ai_raw_data', 300))
+        ai_raw_p = min(50, get_chart_periods(lottery_type=lottery_type).get('ai_raw_data', 300))
         from modules.data_processor import get_db_connection
         conn = get_db_connection()
         rows = conn.execute(

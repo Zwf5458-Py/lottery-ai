@@ -1045,9 +1045,14 @@ def api_delete_ai_history(record_id):
 def api_get_settings():
     """获取当前用户的个人设置"""
     try:
-        from modules.config_manager import load_config
+        from modules.config_manager import load_config, get_chart_periods
 
+        lottery_type = request.args.get("type", "macaujc")
         config = load_config(session["user_id"])
+        
+        # 根据请求类型返回该彩种专属的统计期数配置，向下兼容旧平铺结构
+        config["chart_periods"] = get_chart_periods(session["user_id"], lottery_type)
+        
         api_key = config.get("ai", {}).get("api_key", "")
         if api_key and len(api_key) > 8:
             config["ai"]["api_key_masked"] = api_key[:4] + "****" + api_key[-4:]
@@ -1080,12 +1085,24 @@ def api_save_settings():
                 safe_ai["model"] = ai_in.get("model")
             data["ai"] = safe_ai
 
+        lottery_type = request.args.get("type", "macaujc")
+        branch = 'weilitsai' if lottery_type == 'weilitsai' else 'macaujc'
+
         current_cfg = load_config(user_id)
-        current_periods = (
-            current_cfg.get("chart_periods", {})
-            if isinstance(current_cfg, dict)
-            else {}
-        )
+        raw_periods = current_cfg.get("chart_periods", {})
+        
+        # 兼容并将旧有平铺结构升级为多分支独立结构
+        if not isinstance(raw_periods, dict) or ("macaujc" not in raw_periods and "weilitsai" not in raw_periods):
+            from modules.config_manager import DEFAULT_CONFIG
+            import copy
+            default_flat = DEFAULT_CONFIG["chart_periods"]
+            current_flat = raw_periods if isinstance(raw_periods, dict) else default_flat
+            raw_periods = {
+                "macaujc": copy.deepcopy(current_flat),
+                "weilitsai": copy.deepcopy(current_flat)
+            }
+            
+        current_branch_periods = raw_periods.get(branch, {})
         incoming_periods = (
             data.get("chart_periods", {})
             if isinstance(data.get("chart_periods", {}), dict)
@@ -1097,7 +1114,7 @@ def api_save_settings():
         changed_keys = []
         paid_changed_count = 0
         for k, v in incoming_periods.items():
-            if current_periods.get(k) != v:
+            if current_branch_periods.get(k) != v:
                 changed_keys.append(k)
                 if k not in free_keys:
                     paid_changed_count += 1
@@ -1123,6 +1140,9 @@ def api_save_settings():
             points_deducted = paid_changed_count
             points_balance = deduct_res.get("balance")
 
+        # 将当前修改打包写入对应彩种分支，保存完整的隔离配置
+        raw_periods[branch] = incoming_periods
+        data["chart_periods"] = raw_periods
         success = save_config(data, user_id)
         if success:
             cache.clear()

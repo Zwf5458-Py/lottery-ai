@@ -3378,7 +3378,12 @@ function showSettingsToast(message, type = 'info', persistent = false) {
 
 async function loadSettings() {
     try {
-        const res = await apiFetch('/api/settings');
+        const titleEl = document.querySelector('.settings-header h2');
+        if (titleEl) {
+            titleEl.textContent = state.lotteryType === 'weilitsai' ? '⚙️ 系统设置 (威力彩)' : '⚙️ 系统设置 (新澳门六合彩)';
+        }
+
+        const res = await apiFetch('/api/settings?type=' + state.lotteryType);
         const result = await res.json();
         if (!result.success) return;
 
@@ -3496,7 +3501,7 @@ async function saveSettings() {
             payload.ai.api_base = baseVal.trim();
         }
 
-        const res = await apiFetch('/api/settings', {
+        const res = await apiFetch('/api/settings?type=' + state.lotteryType, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)

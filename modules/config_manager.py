@@ -133,9 +133,23 @@ def get_ai_config(user_id=None) -> dict:
     return ai_cfg
 
 
-def get_chart_periods(user_id=None) -> dict:
-    """获取各图表统计期数"""
-    return load_config(user_id).get("chart_periods", DEFAULT_CONFIG["chart_periods"])
+def get_chart_periods(user_id=None, lottery_type: str = 'macaujc') -> dict:
+    """获取各图表统计期数，根据彩种类型解耦"""
+    branch = 'weilitsai' if lottery_type == 'weilitsai' else 'macaujc'
+    cfg = load_config(user_id)
+    periods = cfg.get("chart_periods", DEFAULT_CONFIG["chart_periods"])
+    
+    # 检查是否已经是隔离字典
+    if isinstance(periods, dict) and ('macaujc' in periods or 'weilitsai' in periods):
+        branch_cfg = periods.get(branch)
+        if isinstance(branch_cfg, dict):
+            return branch_cfg
+            
+    # 向下兼容平铺字典
+    import copy
+    default_flat = DEFAULT_CONFIG["chart_periods"]
+    current_flat = periods if isinstance(periods, dict) else default_flat
+    return copy.deepcopy(current_flat)
 
 
 def get_system_config() -> dict:

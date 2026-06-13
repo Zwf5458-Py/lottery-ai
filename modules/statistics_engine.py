@@ -1345,7 +1345,7 @@ def get_full_analysis(lottery_type: str = 'macaujc') -> dict:
     
     # 读取用户配置的各图表期数
     from modules.config_manager import get_chart_periods
-    periods = get_chart_periods()
+    periods = get_chart_periods(lottery_type=lottery_type)
     
     # 获取马尔可夫链转移推演权重
     conn = get_db_connection()

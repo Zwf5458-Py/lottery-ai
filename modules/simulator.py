@@ -315,7 +315,7 @@ def _calculate_trend_weights(lottery_type: str = 'macaujc', dimensions: list = N
         dimensions = ['big_small', 'odd_even', 'zodiac', 'hot_cold', 'tail']
         
     from modules.config_manager import get_chart_periods
-    periods_cfg = get_chart_periods()
+    periods_cfg = get_chart_periods(lottery_type=lottery_type)
     
     conn = get_db_connection()
     
