@@ -37,7 +37,7 @@ START_YEAR = 2011
 END_YEAR = 2026
 
 # 彩种配置
-LOTTERY_TYPES = {"macaujc": "澳门六合彩", "macaujc2": "新澳门六合彩"}
+LOTTERY_TYPES = {"macaujc": "澳门六合彩", "macaujc2": "新澳门六合彩", "weilitsai": "台湾威力彩"}
 
 
 def create_database():
@@ -110,6 +110,101 @@ def fetch_year_data_with_fallback(
         max_retries: 最大重试次数
     返回: 开奖记录列表
     """
+    if lottery_type == "weilitsai":
+        import re
+        from bs4 import BeautifulSoup
+        raw_records = []
+        for page in range(1, 4):
+            url = f"https://www.lotto-8.com/Taiwan/listlto.asp?indexpage={page}"
+            for attempt in range(max_retries):
+                try:
+                    req = urllib.request.Request(
+                        url,
+                        headers={
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/120.0.0.0"
+                        },
+                    )
+                    with urllib.request.urlopen(
+                        req, timeout=15, context=ssl_context
+                    ) as response:
+                        html = response.read().decode("utf-8", errors="ignore")
+                    soup = BeautifulSoup(html, "html.parser")
+                    tables = soup.find_all("table")
+                    if len(tables) >= 2:
+                        rows = tables[1].find_all("tr")[1:]
+                        for row in rows:
+                            tds = row.find_all("td")
+                            if len(tds) >= 3:
+                                date_str = tds[0].text.strip()
+                                numbers_str = tds[1].text.strip()
+                                special_str = tds[2].text.strip()
+                                match = re.match(r"(\d{2})/(\d{2})(\d{2})", date_str)
+                                if match:
+                                    dd, mm, yy = match.groups()
+                                    rec_year = 2000 + int(yy)
+                                    if rec_year == year:
+                                        raw_records.append(
+                                            {
+                                                "draw_date": f"{rec_year}-{mm}-{dd}",
+                                                "openCode": numbers_str.replace(
+                                                    "\xa0", ""
+                                                ).strip()
+                                                + ","
+                                                + special_str.strip(),
+                                            }
+                                        )
+                        break
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        logger.error(f"  ❌ 抓取威力彩第 {page} 页失败: {e}")
+                    else:
+                        time.sleep(1)
+
+        if not raw_records:
+            return []
+        raw_records.sort(key=lambda x: x["draw_date"])
+
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        roc_year = year - 1911
+        row = cursor.execute(
+            "SELECT draw_number FROM lottery_history WHERE lottery_type='weilitsai' AND draw_number LIKE ? ORDER BY draw_number DESC LIMIT 1",
+            (f"{roc_year}%",),
+        ).fetchone()
+
+        base_seq = 0
+        if row:
+            try:
+                base_seq = int(row[0][-6:])
+            except:
+                pass
+
+        existing_dates = set(
+            r[0]
+            for r in cursor.execute(
+                "SELECT draw_date FROM lottery_history WHERE lottery_type='weilitsai' AND draw_date LIKE ?",
+                (f"{year}-%",),
+            ).fetchall()
+        )
+        conn.close()
+
+        api_records = []
+        current_seq = base_seq
+        for record in raw_records:
+            if record["draw_date"] not in existing_dates:
+                current_seq += 1
+                draw_num = f"{roc_year}{current_seq:06d}"
+                api_records.append(
+                    {
+                        "expect": draw_num,
+                        "openTime": f"{record['draw_date']} 00:00:00",
+                        "openCode": record["openCode"],
+                        "wave": "",
+                        "zodiac": "",
+                    }
+                )
+        return api_records
+
     primary_url = API_BASE.replace("macaujc", lottery_type).format(year=year)
     backup_url = BACKUP_API_BASE.replace("macaujc2", lottery_type).format(year=year)
 

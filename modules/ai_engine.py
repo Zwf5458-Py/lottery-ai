@@ -255,7 +255,8 @@ def analyze_with_ai(stats_summary: dict, lottery_type: str = 'macaujc', dimensio
         special = pre_sel_special
         if len(numbers) < 6:
             seen = set(numbers)
-            for i in range(1, 50):
+            max_val = 39 if lottery_type == 'weilitsai' else 50
+            for i in range(1, max_val):
                 if len(numbers) >= 6: break
                 if i not in seen:
                     numbers.append(i)

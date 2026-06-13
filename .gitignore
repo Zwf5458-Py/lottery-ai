@@ -76,3 +76,6 @@ coverage.xml
 
 # Git worktrees
 .worktrees/
+
+# Process run files
+.run/

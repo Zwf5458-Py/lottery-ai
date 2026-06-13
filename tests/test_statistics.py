@@ -25,9 +25,9 @@ class TestFiveElements:
         # Mock dataframe with weilitsai data
         df = pd.DataFrame({
             'lottery_type': ['weilitsai', 'weilitsai'],
-            'n1': [1, 2], 'n2': [2, 3], 'n3': [3, 4], 
-            'n4': [4, 5], 'n5': [5, 6], 'n6': [6, 7],
-            'special': [1, 8]
+            'num1': [1, 2], 'num2': [2, 3], 'num3': [3, 4], 
+            'num4': [4, 5], 'num5': [5, 6], 'num6': [6, 7],
+            'special_num': [1, 8]
         })
         
         # Test Zone 1
@@ -113,9 +113,9 @@ class TestNumberFrequency:
         # Mock dataframe with weilitsai data
         df = pd.DataFrame({
             'lottery_type': ['weilitsai', 'weilitsai'],
-            'n1': [1, 2], 'n2': [2, 3], 'n3': [3, 4], 
-            'n4': [4, 5], 'n5': [5, 6], 'n6': [6, 7],
-            'special': [1, 8]
+            'num1': [1, 2], 'num2': [2, 3], 'num3': [3, 4], 
+            'num4': [4, 5], 'num5': [5, 6], 'num6': [6, 7],
+            'special_num': [1, 8]
         })
         
         # Test Zone 1

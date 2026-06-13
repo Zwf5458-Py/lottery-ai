@@ -202,12 +202,12 @@ def number_frequency(df: pd.DataFrame = None, periods: int = 100, lottery_type: 
     if lottery_type == 'weilitsai':
         if zone == 1:
             all_nums = []
-            for col in ['n1', 'n2', 'n3', 'n4', 'n5', 'n6']:
+            for col in ['num1', 'num2', 'num3', 'num4', 'num5', 'num6']:
                 if col in df.columns:
                     all_nums.extend(df[col].tolist())
             max_num = 38
         else:
-            all_nums = df['special'].tolist() if 'special' in df.columns else []
+            all_nums = df['special_num'].tolist() if 'special_num' in df.columns else []
             max_num = 8
     else:
         all_nums = _get_all_numbers_with_special(df)
@@ -250,8 +250,8 @@ def hot_cold_numbers(top_n: int = 10, df: pd.DataFrame = None, periods: int = 10
             # It's a bit complex vectorization, fallback to rows if needed or use pandas
             # Let's vectorize across n1-n6
             # Get the matrix of n1-n6
-            if not df_sorted.empty and 'n1' in df_sorted.columns:
-                arr = df_sorted[['n1', 'n2', 'n3', 'n4', 'n5', 'n6']].values.astype(int)
+            if not df_sorted.empty and 'num1' in df_sorted.columns:
+                arr = df_sorted[['num1', 'num2', 'num3', 'num4', 'num5', 'num6']].values.astype(int)
             else:
                 arr = np.array([])
             
@@ -263,7 +263,7 @@ def hot_cold_numbers(top_n: int = 10, df: pd.DataFrame = None, periods: int = 10
                     omission_dict[num] = 0
         else:
             max_num = 8
-            special_arr = df_sorted['special'].values.astype(int) if 'special' in df_sorted.columns else np.array([])
+            special_arr = df_sorted['special_num'].values.astype(int) if 'special_num' in df_sorted.columns else np.array([])
             for num in range(1, max_num + 1):
                 if special_arr.size > 0:
                     indices = np.where(special_arr == num)[0]
@@ -300,7 +300,7 @@ def odd_even_ratio(df: pd.DataFrame = None, periods: int = 100, lottery_type: st
         df = clean_data(load_data(lottery_type))
         
     if lottery_type == 'weilitsai':
-        target_col = 'special' if zone == 2 else 'n1' # just fallback to n1 if zone 1 is forced, though usually zone 2 is used
+        target_col = 'special_num' if zone == 2 else 'num1' # just fallback to num1 if zone 1 is forced, though usually zone 2 is used
     else:
         target_col = 'special_num'
 
@@ -371,7 +371,7 @@ def big_small_ratio(df: pd.DataFrame = None, periods: int = 100, lottery_type: s
         df = clean_data(load_data(lottery_type))
     
     if lottery_type == 'weilitsai':
-        target_col = 'special' if zone == 2 else 'n1'
+        target_col = 'special_num' if zone == 2 else 'num1'
         threshold = 5 if zone == 2 else 20
     else:
         target_col = 'special_num'
@@ -436,9 +436,9 @@ def big_small_ratio(df: pd.DataFrame = None, periods: int = 100, lottery_type: s
     }
 
 
-def zodiac_momentum_analysis(df: pd.DataFrame, z_map: dict) -> dict:
+def zodiac_momentum_analysis(df: pd.DataFrame, z_map: dict = None, lottery_type: str = 'macaujc') -> dict:
     """
-    生肖路单连涨连跌特征（动量拐点预测）
+    生肖路单连涨连跌特征（动量拐点预测） / 威力彩一区正码和值动量拐点分析
     根据最近图表中的连续向上或向下趋势，计算可能反向的概率权重。
     引入 RLE 复杂多维跳变观测系统。
     """
@@ -446,10 +446,86 @@ def zodiac_momentum_analysis(df: pd.DataFrame, z_map: dict) -> dict:
         return {'current_trend': 'none', 'consecutive_count': 0, 'reversal_probability': 0}
     
     zodiac_order = ['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪']
-    
-    # 扩大观测窗口至 150 期
     recent_draws = df.head(150)
     
+    if lottery_type == 'weilitsai':
+        # 威力彩：统计 1 区 6 个正码的和值变化走势
+        y_values = []
+        for _, row in recent_draws.iterrows():
+            try:
+                draw_sum = sum(int(row[col]) for col in ['num1', 'num2', 'num3', 'num4', 'num5', 'num6'] if pd.notna(row[col]))
+                y_values.append(draw_sum)
+            except:
+                continue
+        y_values.reverse()
+        
+        if len(y_values) < 2:
+            return {'current_trend': 'none', 'consecutive_count': 0, 'reversal_probability': 0}
+            
+        trends = []
+        for i in range(1, len(y_values)):
+            diff = y_values[i] - y_values[i-1]
+            if diff > 0: trends.append('up')
+            elif diff < 0: trends.append('down')
+            else: trends.append('flat')
+            
+        trends = [t for t in trends if t != 'flat']
+        if not trends:
+            return {'current_trend': 'none', 'consecutive_count': 0, 'reversal_probability': 0}
+            
+        rev_trends = list(reversed(trends))
+        current_trend = rev_trends[0]
+        consecutive_count = 0
+        for t in rev_trends:
+            if t == current_trend:
+                consecutive_count += 1
+            else:
+                break
+                
+        def _analyze_sum_pattern(trends_arr):
+            if len(trends_arr) < 5: return 1.0, 1.0
+            rle = []
+            curr_val = trends_arr[0]
+            count = 1
+            for i in range(1, len(trends_arr)):
+                val = trends_arr[i]
+                if val == curr_val:
+                    count += 1
+                else:
+                    rle.append((curr_val, count))
+                    curr_val = val
+                    count = 1
+            rle.append((curr_val, count))
+            
+            w_keep = 1.0
+            w_break = 1.0
+            c_count = rle[0][1]
+            
+            # 均值回归防长龙
+            if c_count == 3:
+                w_break *= 2.5
+            elif c_count >= 4:
+                w_break *= (4.0 + (c_count - 4) * 2.0)
+                
+            return w_keep, w_break
+            
+        w_keep_sum, w_break_sum = _analyze_sum_pattern(rev_trends)
+        total_w = w_keep_sum + w_break_sum
+        if total_w == 0: total_w = 1
+        rev_prob = (w_break_sum / total_w) * 100
+        
+        reversal_target = 'down' if current_trend == 'up' else 'up'
+        
+        return {
+            'current_trend': current_trend,
+            'consecutive_count': consecutive_count,
+            'reversal_probability': rev_prob,
+            'reversal_target_direction': reversal_target,
+            'current_y': y_values[-1] if y_values else -1,
+            'last_step': current_trend,
+            'color_momentum_boosts': {'red': 1.0, 'blue': 1.0, 'green': 1.0}
+        }
+
     y_values = []
     for _, row in recent_draws.iterrows():
         try:
@@ -474,7 +550,7 @@ def zodiac_momentum_analysis(df: pd.DataFrame, z_map: dict) -> dict:
         elif diff < 0: trends.append('down')
         else: trends.append('flat')
         
-    # 清理掉假波动(也就是连续两期生肖相同，y 轴停留在原地的干扰项)
+    # 清理掉假波动
     trends = [t for t in trends if t != 'flat']
     if not trends:
         return {'current_trend': 'none', 'consecutive_count': 0, 'reversal_probability': 0}
@@ -557,8 +633,7 @@ def zodiac_momentum_analysis(df: pd.DataFrame, z_map: dict) -> dict:
     
     reversal_target = 'down' if current_trend == 'up' else 'up'
     
-    # ====== 新增：波色模式提取与分析 ======
-    # 直接在同一个 150 期数据集中提取颜色跳动规律
+    # ------ 波色模式提取与分析 ------
     color_seq = []
     red_set = {1, 2, 7, 8, 12, 13, 18, 19, 23, 24, 29, 30, 34, 35, 40, 45, 46}
     blue_set = {3, 4, 9, 10, 14, 15, 20, 25, 26, 31, 36, 37, 41, 42, 47, 48}
@@ -582,9 +657,7 @@ def zodiac_momentum_analysis(df: pd.DataFrame, z_map: dict) -> dict:
         w_keep_color, w_break_color = _analyze_zodiac_pattern(rev_color_seq)
         current_color = rev_color_seq[0]
         
-        # 将颜色动量转化为具体颜色的权重倍增器
         color_boosts[current_color] *= w_keep_color
-        # 逆势转向（打断当前颜色连庄的权重，均分给其他两色）
         break_boost = w_break_color / 2.0
         for c in ['red', 'blue', 'green']:
             if c != current_color:
@@ -598,7 +671,6 @@ def zodiac_momentum_analysis(df: pd.DataFrame, z_map: dict) -> dict:
         'current_y': y_values[-1] if y_values else -1,
         'last_step': current_trend,
         'zodiac_order': zodiac_order,
-        # 新增输出给 simulator 用的波色权重修饰符
         'color_momentum_boosts': color_boosts
     }
 
@@ -621,13 +693,13 @@ def tail_number_stats(df: pd.DataFrame = None, periods: int = 100, lottery_type:
     if lottery_type == 'weilitsai':
         if zone == 1:
             all_nums = []
-            for col in ['n1', 'n2', 'n3', 'n4', 'n5', 'n6']:
+            for col in ['num1', 'num2', 'num3', 'num4', 'num5', 'num6']:
                 if col in df_recent.columns:
                     all_nums.extend(df_recent[col].tolist())
-            special_arr = df[['n1', 'n2', 'n3', 'n4', 'n5', 'n6']].values.astype(int) if 'n1' in df.columns else np.array([])
+            special_arr = df[['num1', 'num2', 'num3', 'num4', 'num5', 'num6']].values.astype(int) if 'num1' in df.columns else np.array([])
         else:
-            all_nums = df_recent['special'].tolist() if 'special' in df_recent.columns else []
-            special_arr = df['special'].values.astype(int) if 'special' in df.columns else np.array([])
+            all_nums = df_recent['special_num'].tolist() if 'special_num' in df_recent.columns else []
+            special_arr = df['special_num'].values.astype(int) if 'special_num' in df.columns else np.array([])
     else:
         all_nums = _get_all_numbers_with_special(df_recent)
         special_arr = df['special_num'].values.astype(int) if 'special_num' in df.columns else np.array([])
@@ -643,8 +715,8 @@ def tail_number_stats(df: pd.DataFrame = None, periods: int = 100, lottery_type:
         
     df_sorted = df.sort_values(by=['draw_date', 'draw_number'], ascending=[False, False])
     if lottery_type == 'weilitsai' and zone == 1:
-        if 'n1' in df_sorted.columns:
-            arr = df_sorted[['n1', 'n2', 'n3', 'n4', 'n5', 'n6']].values.astype(int)
+        if 'num1' in df_sorted.columns:
+            arr = df_sorted[['num1', 'num2', 'num3', 'num4', 'num5', 'num6']].values.astype(int)
             for t in range(10):
                 if arr.size > 0:
                     indices = np.where((arr % 10 == t).any(axis=1))[0]
@@ -653,7 +725,7 @@ def tail_number_stats(df: pd.DataFrame = None, periods: int = 100, lottery_type:
                     omission_dict[t] = 0
     else:
         if lottery_type == 'weilitsai':
-            tail_arr = df_sorted['special'].values.astype(int) % 10 if 'special' in df_sorted.columns else np.array([])
+            tail_arr = df_sorted['special_num'].values.astype(int) % 10 if 'special_num' in df_sorted.columns else np.array([])
         else:
             tail_arr = df_sorted['special_num'].values.astype(int) % 10 if 'special_num' in df_sorted.columns else np.array([])
         for t in range(10):
@@ -719,7 +791,7 @@ def special_number_frequency(df: pd.DataFrame = None) -> dict:
     return result
 
 
-def bayesian_inference(df: pd.DataFrame, z_map: dict, periods: int = 100) -> list:
+def bayesian_inference(df: pd.DataFrame, z_map: dict = None, periods: int = 100, lottery_type: str = 'macaujc') -> list:
     """
     贝叶斯推断：结合先验概率与最新遗漏值推算反弹概率
     periods: 用于计算先验频率的期数范围
@@ -731,13 +803,69 @@ def bayesian_inference(df: pd.DataFrame, z_map: dict, periods: int = 100) -> lis
     df_recent = df.head(periods) if periods > 0 else df
     total_draws = len(df_recent)
     
+    if lottery_type == 'weilitsai':
+        # 统计指定期数内一区 1-38 每个号码的出现频次（先验），并统计历史遗漏数据
+        num_list = []
+        for _, row in df_recent.iterrows():
+            for col in ['num1', 'num2', 'num3', 'num4', 'num5', 'num6']:
+                val = row.get(col)
+                if pd.notna(val):
+                    num_list.append(int(val))
+        counts = Counter(num_list)
+        
+        omission = {}
+        history_omissions = {n: [] for n in range(1, 39)}
+        
+        for n in range(1, 39):
+            last_seen_pos = -1
+            for pos, (_, row) in enumerate(df.iterrows()):
+                draw_nums = [row.get(col) for col in ['num1', 'num2', 'num3', 'num4', 'num5', 'num6']]
+                if n in draw_nums or str(n) in draw_nums or float(n) in draw_nums:
+                    if last_seen_pos == -1:
+                        omission[n] = pos
+                    else:
+                        gap = pos - last_seen_pos - 1
+                        if gap >= 0:
+                            history_omissions[n].append(gap)
+                    last_seen_pos = pos
+                    
+            if last_seen_pos == -1:
+                omission[n] = len(df)
+                
+        results = []
+        for n in range(1, 39):
+            c = counts.get(n, 0)
+            p_prior = c / (total_draws * 6) if total_draws > 0 else 1/38
+            omi = omission.get(n, 0)
+            
+            h_omis = history_omissions.get(n, [])
+            max_omi = max(h_omis) if h_omis else (total_draws / 38 * 18)
+            avg_omi = (sum(h_omis) / len(h_omis)) if h_omis else (total_draws / 38 * 6)
+            
+            approaching_ratio = omi / max(max_omi, 1)
+            boost_factor = (1 + approaching_ratio) ** 2.5
+            posterior_score = p_prior * boost_factor * 100
+            
+            breaking_record = omi > max_omi
+            
+            results.append({
+                'number': n,
+                'prior': round(p_prior * 100, 1),
+                'omission': omi,
+                'max_omission': int(max_omi),
+                'avg_omission': round(avg_omi, 1),
+                'posterior': round(posterior_score, 1),
+                'breaking_record': breaking_record
+            })
+            
+        results.sort(key=lambda x: x['posterior'], reverse=True)
+        return results
+
     # 统计指定期数内每个生肖的出现频次（先验），并统计历史遗漏数据
     zodiac_list = [z_map.get(int(row['special_num']), '未知') for _, row in df_recent.iterrows()]
     counts = Counter(zodiac_list)
     
     # 计算当前遗漏和历史遗漏统计
-    # omission: 当前遗漏（从最新一期往回数，直到该生肖最近一次出现的行数）
-    # history_omissions: 历史上每次出现的间隔期数列表
     omission = {}
     history_omissions = {z: [] for z in ['鼠','牛','虎','兔','龙','蛇','马','羊','猴','鸡','狗','猪']}
     
@@ -799,14 +927,164 @@ def bayesian_inference(df: pd.DataFrame, z_map: dict, periods: int = 100) -> lis
     return results
 
 
-def lstm_simulation(df: pd.DataFrame, z_map: dict, periods: int = 100) -> list:
+def lstm_simulation(df: pd.DataFrame, z_map: dict = None, periods: int = 100, lottery_type: str = 'macaujc') -> list:
     """
     深度学习模拟预测：基于真实历史数据的多维特征提取，
-    使用 sklearn.neural_network.MLPClassifier 训练小型神经网络预测生肖。
-    提取特征：近50期频率、近10期频率、当前遗漏值。
+    使用 sklearn.neural_network.MLPClassifier 训练小型神经网络预测。
     """
     if df is None or len(df) < 50: return []
     
+    if lottery_type == 'weilitsai':
+        try:
+            from sklearn.neural_network import MLPClassifier
+            
+            df_rev = df.iloc[::-1].reset_index(drop=True)
+            draws_seq = []
+            for _, row in df_rev.iterrows():
+                draw_nums = []
+                for col in ['num1', 'num2', 'num3', 'num4', 'num5', 'num6']:
+                    val = row.get(col)
+                    if pd.notna(val):
+                        draw_nums.append(int(val))
+                draws_seq.append(draw_nums)
+                
+            train_seq = draws_seq[-500:]
+            if len(train_seq) < 60:
+                raise ValueError("Data too short")
+                
+            X = []
+            y = []
+            
+            for i in range(50, len(train_seq)):
+                target_draw = train_seq[i]
+                window_50 = [num for sub in train_seq[i-50:i] for num in sub]
+                window_10 = [num for sub in train_seq[i-10:i] for num in sub]
+                
+                omi_dict = {n: 50 for n in range(1, 39)}
+                for step in range(i-1, i-51, -1):
+                    for num in train_seq[step]:
+                        if num in omi_dict and omi_dict[num] == 50:
+                            omi_dict[num] = i - 1 - step
+                            
+                count_50 = Counter(window_50)
+                count_10 = Counter(window_10)
+                
+                for n in range(1, 39):
+                    f_50 = count_50[n]
+                    f_10 = count_10[n]
+                    omi = omi_dict[n]
+                    X.append([f_50, f_10, omi])
+                    y.append(1 if n in target_draw else 0)
+                    
+            clf = MLPClassifier(hidden_layer_sizes=(16, 8), max_iter=200, random_state=42)
+            if len(X) > 0 and sum(y) > 0:
+                clf.fit(X, y)
+            else:
+                raise ValueError("Invalid target distribution")
+                
+            current_50 = [num for sub in train_seq[-50:] for num in sub]
+            current_10 = [num for sub in train_seq[-10:] for num in sub]
+            
+            omi_dict = {n: 50 for n in range(1, 39)}
+            for step in range(len(train_seq)-1, len(train_seq)-51, -1):
+                for num in train_seq[step]:
+                    if num in omi_dict and omi_dict[num] == 50:
+                        omi_dict[num] = len(train_seq) - 1 - step
+                        
+            c_50 = Counter(current_50)
+            c_10 = Counter(current_10)
+            
+            X_pred = []
+            for n in range(1, 39):
+                X_pred.append([c_50[n], c_10[n], omi_dict[n]])
+                
+            probs = clf.predict_proba(X_pred)[:, 1] if hasattr(clf, 'classes_') else np.zeros(38)
+            
+            max_p = max(probs)
+            min_p = min(probs)
+            if max_p == min_p:
+                scores = [50 for _ in range(1, 39)]
+            else:
+                scores = [5 + 90 * (p - min_p) / (max_p - min_p) for p in probs]
+                
+            results = []
+            for idx, n in enumerate(range(1, 39)):
+                score = scores[idx]
+                if score >= 75: signal = "强势突破"
+                elif score >= 55: signal = "震荡上行"
+                elif score <= 25: signal = "深度回调"
+                else: signal = "横盘整理"
+                
+                results.append({
+                    'number': n,
+                    'score': round(score, 1),
+                    'signal': signal
+                })
+                
+            results.sort(key=lambda x: x['score'], reverse=True)
+            return results
+            
+        except Exception as e:
+            df_recent = df.head(periods) if periods > 0 else df
+            total = len(df_recent)
+            
+            num_list = []
+            for _, row in df_recent.iterrows():
+                for col in ['num1', 'num2', 'num3', 'num4', 'num5', 'num6']:
+                    val = row.get(col)
+                    if pd.notna(val):
+                        num_list.append(int(val))
+            counts = Counter(num_list)
+            avg_count = (total * 6) / 38.0 if total > 0 else 1
+            
+            short_window = min(20, total)
+            short_list = []
+            for _, row in df_recent.head(short_window).iterrows():
+                for col in ['num1', 'num2', 'num3', 'num4', 'num5', 'num6']:
+                    val = row.get(col)
+                    if pd.notna(val):
+                        short_list.append(int(val))
+            short_counts = Counter(short_list)
+            short_avg = (short_window * 6) / 38.0
+            
+            omission = {}
+            for n in range(1, 39):
+                omi = 0
+                for _, row in df.iterrows():
+                    draw_nums = [row.get(col) for col in ['num1', 'num2', 'num3', 'num4', 'num5', 'num6']]
+                    if n in draw_nums or str(n) in draw_nums or float(n) in draw_nums:
+                        break
+                    omi += 1
+                omission[n] = omi
+            max_omi = max(omission.values()) if omission else 1
+            
+            results = []
+            for n in range(1, 39):
+                freq = counts.get(n, 0)
+                short_freq = short_counts.get(n, 0)
+                omi = omission.get(n, 0)
+                
+                freq_score = min(35, (freq / avg_count) * 17.5) if avg_count > 0 else 17.5
+                momentum_score = min(30, (short_freq / short_avg) * 15) if short_avg > 0 else 15
+                omission_score = min(35, (omi / max(max_omi, 1)) * 35)
+                
+                score = freq_score + momentum_score + omission_score
+                score = max(5, min(95, score))
+                
+                if score >= 75: signal = "强势突破"
+                elif score >= 55: signal = "震荡上行"
+                elif score <= 25: signal = "深度回调"
+                else: signal = "横盘整理"
+                    
+                results.append({
+                    'number': n,
+                    'score': round(score, 1),
+                    'signal': signal
+                })
+                
+            results.sort(key=lambda x: x['score'], reverse=True)
+            return results
+
     zodiac_order = ['鼠','牛','虎','兔','龙','蛇','马','羊','猴','鸡','狗','猪']
     
     try:
@@ -1083,10 +1361,13 @@ def get_full_analysis(lottery_type: str = 'macaujc') -> dict:
     latest_zodiac = "未知"
     latest_num = "??"
     latest_color = "未知"
+    latest_numbers = []
     try:
         if not df.empty:
+            if 'num1' in df.columns:
+                latest_numbers = [int(df.iloc[0][col]) for col in ['num1', 'num2', 'num3', 'num4', 'num5', 'num6']]
             if lottery_type == 'weilitsai':
-                latest_num = int(df.iloc[0]['special']) if 'special' in df.columns else "??"
+                latest_num = int(df.iloc[0]['special_num']) if 'special_num' in df.columns else "??"
             else:
                 latest_num = int(df.iloc[0]['special_num'])
                 latest_zodiac = z_map.get(latest_num, "未知")
@@ -1095,8 +1376,86 @@ def get_full_analysis(lottery_type: str = 'macaujc') -> dict:
         pass
         
     if lottery_type == 'weilitsai':
+        # === 威力彩 1 区 6 码下期推算预测概率计算 ===
+        from collections import Counter
+        base_weights = {n: 1.0 for n in range(1, 39)}
+        num_freq = Counter()
+        omissions = {n: len(df) for n in range(1, 39)}
+        
+        for idx, row in df.iterrows():
+            draw_nums = [row.get(c) for c in ['num1', 'num2', 'num3', 'num4', 'num5', 'num6']]
+            for n in draw_nums:
+                if pd.notna(n) and 1 <= int(n) <= 38:
+                    n_int = int(n)
+                    if omissions[n_int] == len(df):
+                        omissions[n_int] = idx
+                        
+        for _, row in df.head(100).iterrows():
+            draw_nums = [row.get(c) for c in ['num1', 'num2', 'num3', 'num4', 'num5', 'num6']]
+            for n in draw_nums:
+                if pd.notna(n) and 1 <= int(n) <= 38:
+                    num_freq[int(n)] += 1
+                    
+        avg_freq = sum(num_freq.values()) / 38 if num_freq else 1
+        max_omission = max(omissions.values()) if omissions else 0
+        
+        for n in range(1, 39):
+            f = num_freq.get(n, 0)
+            w = 1.0
+            if avg_freq > 0:
+                ratio = f / avg_freq
+                if ratio < 0.5:
+                    w = 1.6
+                elif ratio < 0.8:
+                    w = 1.3
+                elif ratio > 1.5:
+                    w = 0.85
+                else:
+                    w = 1.0 + (ratio - 1) * 0.15
+                    
+            if omissions[n] == max_omission and max_omission > 5:
+                w *= (1.0 + (max_omission / 100.0) * 2.5)
+            base_weights[n] = w
+            
+        alerts = calculate_omission_thresholds(df, lottery_type, zone=1)
+        for n, alert_data in alerts.items():
+            if alert_data.get('is_alert') and n in base_weights:
+                base_weights[n] *= 3.0
+                
+        last_nums = []
+        repeat_nums = set()
+        if not df.empty:
+            last_row = df.iloc[0]
+            for col in ['num1', 'num2', 'num3', 'num4', 'num5', 'num6']:
+                val = last_row.get(col)
+                if pd.notna(val):
+                    last_nums.append(int(val))
+            repeat_nums = set(last_nums)
+            for n in last_nums:
+                for delta in [-1, 1]:
+                    neighbor_num = n + delta
+                    if 1 <= neighbor_num <= 38 and neighbor_num not in repeat_nums and neighbor_num in base_weights:
+                        base_weights[neighbor_num] *= 1.5
+                        
+        total_w = sum(base_weights.values())
+        prob_list = []
+        for n in range(1, 39):
+            prob = (base_weights[n] / total_w) * 100 if total_w > 0 else 0
+            prob_list.append({
+                'number': n,
+                'probability': round(prob, 2),
+                'weight': round(base_weights[n], 2),
+                'is_alert': alerts.get(n, {}).get('is_alert', False),
+                'is_neighbor': any(abs(n - ln) == 1 and n not in repeat_nums for ln in last_nums) if not df.empty else False
+            })
+            
+        predict_probabilities_z1 = sorted(prob_list, key=lambda x: x['probability'], reverse=True)
+
         return {
             'total_draws': len(df),
+            'latest_num': latest_num,
+            'latest_numbers': latest_numbers,
+            'predict_probabilities_z1': predict_probabilities_z1,
             'number_frequency_z1': number_frequency(df, periods.get('hot_cold', 100), lottery_type, zone=1),
             'number_frequency_z2': number_frequency(df, periods.get('hot_cold', 100), lottery_type, zone=2),
             'hot_cold_z1': hot_cold_numbers(10, df, periods.get('hot_cold', 100), lottery_type, zone=1),
@@ -1107,11 +1466,23 @@ def get_full_analysis(lottery_type: str = 'macaujc') -> dict:
             'big_small_z2': big_small_ratio(df, periods.get('big_small', 100), lottery_type, zone=2),
             'tail_numbers_z1': tail_number_stats(df, periods.get('tail', 100), lottery_type, zone=1),
             'tail_numbers_z2': tail_number_stats(df, periods.get('tail', 100), lottery_type, zone=2),
+            'consecutive': zodiac_momentum_analysis(df, None, lottery_type='weilitsai'),
+            'markov': {
+                'target_num': latest_num,
+                'target_zodiac': '',
+                'target_color': '',
+                'weights': markov_weights,
+                'color_weights': {}
+            },
+            'bayesian': bayesian_inference(df, None, periods.get('bayesian', 100), lottery_type='weilitsai'),
+            'lstm': lstm_simulation(df, None, periods.get('lstm', 100), lottery_type='weilitsai'),
             'chart_periods': periods
         }
         
     return {
         'total_draws': len(df),
+        'latest_num': latest_num,
+        'latest_numbers': latest_numbers,
         'number_frequency': number_frequency(df, periods.get('hot_cold', 100), lottery_type),
         'hot_cold': hot_cold_numbers(10, df, periods.get('hot_cold', 100), lottery_type),
         'odd_even': odd_even_ratio(df, periods.get('odd_even', 100), lottery_type),

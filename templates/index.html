@@ -267,10 +267,11 @@
     <nav class="navbar">
         <div class="nav-brand">
             <span class="brand-icon">🎰</span>
-            <h1>六合彩智能分析系统</h1>
+            <h1>彩票智能分析系统</h1>
         </div>
         <div class="nav-controls">
             <div class="lottery-type-selector">
+                <button class="type-btn" data-type="macaujc2">新澳门六合彩</button>
                 <button class="type-btn active" data-type="weilitsai">威力彩</button>
             </div>
             <div class="nav-tabs">
@@ -579,6 +580,14 @@
                     </div>
                 </div>
 
+                <!-- 预测概率分布 (威力彩一区专属) -->
+                <div class="chart-card glass" id="chart-card-predict-prob" style="display: none;">
+                    <h3 class="chart-title">🔮 第一区下期号码推算概率排行 (Top 15)</h3>
+                    <div class="chart-container">
+                        <canvas id="chart-predict-prob"></canvas>
+                    </div>
+                </div>
+
                 <!-- 冷热号排行 -->
                 <div class="chart-card glass" id="chart-card-hotcold">
                     <div
@@ -608,15 +617,8 @@
                         </style>
                     </div>
                     <!-- 号码冷热容器 (默认隐藏) -->
-                    <div class="hot-cold-container" id="number-hotcold-view" style="display: none;">
-                        <div class="hot-cold-column">
-                            <h4 class="column-title hot-title">🔥 热号</h4>
-                            <div id="hot-numbers" class="number-rank-list"></div>
-                        </div>
-                        <div class="hot-cold-column">
-                            <h4 class="column-title cold-title">❄️ 冷号</h4>
-                            <div id="cold-numbers" class="number-rank-list"></div>
-                        </div>
+                    <div id="number-hotcold-view" style="display: none; width: 100%; overflow-x: auto; padding-bottom: 8px;">
+                        <div id="hot-cold-grid" style="display: grid; grid-template-columns: 80px repeat(10, 1fr); gap: 6px; min-width: 720px; align-items: stretch;"></div>
                     </div>
                     <!-- 波色冷热容器 -->
                     <div id="color-hotcold-view"></div>
@@ -795,7 +797,7 @@
                                 <input type="checkbox" name="dim" value="tail" checked>
                                 <span class="dim-label">🎯 尾数分布</span>
                             </label>
-                            <label class="dim-checkbox">
+                            <label class="dim-checkbox" id="dim-checkbox-color">
                                 <input type="checkbox" name="dim" value="color" checked>
                                 <span class="dim-label">🎨 波色推测</span>
                             </label>
@@ -952,7 +954,8 @@
                                 <tr>
                                     <th>期号</th>
                                     <th>日期</th>
-                                    <th id="history-special-col">特码</th>
+                                    <th id="history-numbers-col" style="text-align: center;">正码</th>
+                                    <th id="history-special-col" style="text-align: center;">特码</th>
                                 </tr>
                             </thead>
                             <tbody id="history-tbody">

@@ -312,6 +312,10 @@ function initLotteryTypeSelector() {
 function updateUIForLotteryType() {
     const isWeilitsai = state.lotteryType === 'weilitsai';
     
+    const numbersCol = document.getElementById('history-numbers-col');
+    if (numbersCol) {
+        numbersCol.textContent = isWeilitsai ? '第一區' : '正码';
+    }
     const specialCol = document.getElementById('history-special-col');
     if (specialCol) {
         specialCol.textContent = isWeilitsai ? '第二區' : '特码';
@@ -326,20 +330,84 @@ function updateUIForLotteryType() {
     
     zodiacCharts.forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.style.display = isWeilitsai ? 'none' : '';
+        if (el) {
+            if (isWeilitsai && (id === 'chart-card-zodiac' || id === 'chart-card-five-elements')) {
+                el.style.display = 'none';
+            } else {
+                el.style.display = '';
+            }
+        }
     });
 
     const colorMode = document.getElementById('hotcold-mode-color');
+    const colorView = document.getElementById('color-hotcold-view');
+    const numView = document.getElementById('number-hotcold-view');
+    
     if (colorMode) {
         colorMode.style.display = isWeilitsai ? 'none' : '';
         if (isWeilitsai) {
-            // Force select number mode if color mode was selected
             const numberRadio = document.querySelector('input[name="hotcold_mode"][value="number"]');
             if (numberRadio) {
                 numberRadio.checked = true;
-                numberRadio.dispatchEvent(new Event('change'));
             }
         }
+    }
+
+    if (isWeilitsai) {
+        if (colorView) colorView.style.display = 'none';
+        if (numView) numView.style.display = 'flex';
+    } else {
+        const checkedVal = document.querySelector('input[name="hotcold_mode"]:checked')?.value || 'color';
+        if (checkedVal === 'color') {
+            if (numView) numView.style.display = 'none';
+            if (colorView) colorView.style.display = 'block';
+        } else {
+            if (numView) numView.style.display = 'flex';
+            if (colorView) colorView.style.display = 'none';
+        }
+    }
+
+    // 动态更新单双连号和大小连号的卡片标题，以区分威力彩的第二区与普通特码
+    const oddEvenTitle = document.querySelector('#chart-odd-even').closest('.chart-card').querySelector('.chart-title');
+    if (oddEvenTitle) {
+        oddEvenTitle.textContent = isWeilitsai ? '⚖️ 特码 (第二區) 单双连号（长龙）频次' : '⚖️ 特码单双连号（长龙）频次';
+    }
+    const bigSmallTitle = document.querySelector('#chart-big-small').closest('.chart-card').querySelector('.chart-title');
+    if (bigSmallTitle) {
+        bigSmallTitle.textContent = isWeilitsai ? '📐 特码 (第二區) 大小连号（长龙）频次' : '📐 特码大小连号（长龙）频次';
+    }
+
+    const predictProbCard = document.getElementById('chart-card-predict-prob');
+    if (predictProbCard) {
+        predictProbCard.style.display = isWeilitsai ? '' : 'none';
+    }
+
+    // 控制模拟开奖板块的维度和按钮在不同彩种时的显示/隐藏
+    const hiddenDimsForWeili = ['color'];
+    const allDimsForWeili = ['color', 'markov', 'consecutive', 'bayesian', 'lstm'];
+    allDimsForWeili.forEach(val => {
+        const checkbox = document.querySelector(`input[name="dim"][value="${val}"]`);
+        if (checkbox) {
+            const label = checkbox.closest('.dim-checkbox');
+            if (label) {
+                label.style.display = (isWeilitsai && hiddenDimsForWeili.includes(val)) ? 'none' : '';
+            }
+            if (isWeilitsai && hiddenDimsForWeili.includes(val)) {
+                checkbox.checked = false; // 威力彩屏蔽波色
+            } else {
+                checkbox.checked = true; // 默认重新勾选
+            }
+        }
+    });
+
+    const btnZodiac = document.getElementById('btn-zodiac-simulate');
+    if (btnZodiac) {
+        btnZodiac.style.display = isWeilitsai ? 'none' : '';
+    }
+
+    const resZodiac = document.getElementById('sim-zodiac-result');
+    if (resZodiac && isWeilitsai) {
+        resZodiac.style.display = 'none';
     }
 }
 
@@ -414,9 +482,12 @@ function renderStatistics(data) {
     // 概览卡片
     document.getElementById('total-draws').textContent = data.total_draws.toLocaleString();
 
-    if (data.hot_cold.hot.length > 0) {
-        const num = data.hot_cold.hot[0].number;
-        const count = data.hot_cold.hot[0].count;
+    const isWeilitsai = state.lotteryType === 'weilitsai';
+    const hotColdData = isWeilitsai ? data.hot_cold_z1 : data.hot_cold;
+
+    if (hotColdData && hotColdData.hot && hotColdData.hot.length > 0) {
+        const num = hotColdData.hot[0].number;
+        const count = hotColdData.hot[0].count;
         const color = getBallColorHex(num);
         const darkColor = color === '#ef4444' ? '#d30000' : (color === '#3b82f6' ? '#0055d3' : (color === '#22c55e' ? '#00d34b' : '#d4a017'));
         document.getElementById('hottest-number').innerHTML = `
@@ -426,9 +497,9 @@ function renderStatistics(data) {
             </div>
         `;
     }
-    if (data.hot_cold.cold.length > 0) {
-        const num = data.hot_cold.cold[0].number;
-        const count = data.hot_cold.cold[0].count;
+    if (hotColdData && hotColdData.cold && hotColdData.cold.length > 0) {
+        const num = hotColdData.cold[0].number;
+        const count = hotColdData.cold[0].count;
         const color = getBallColorHex(num);
         const darkColor = color === '#ef4444' ? '#d30000' : (color === '#3b82f6' ? '#0055d3' : (color === '#22c55e' ? '#00d34b' : '#d4a017'));
         document.getElementById('coldest-number').innerHTML = `
@@ -439,34 +510,82 @@ function renderStatistics(data) {
         `;
     }
 
-    // 渲染上期特码
-    if (data.markov && data.markov.target_num) {
-        const zEmoji = { '鼠': '🐭', '牛': '🐮', '虎': '🐯', '兔': '🐰', '龙': '🐲', '蛇': '🐍', '马': '🐴', '羊': '🐑', '猴': '🐵', '鸡': '🐔', '狗': '🐶', '猪': '猪' };
-        const num = data.markov.target_num;
-        const zodiac = data.markov.target_zodiac || '未知';
-        const emoji = zEmoji[zodiac] || '🎰';
+    // 渲染上期开奖号码
+    const titleEl = document.querySelector('#card-latest-zodiac .stat-label');
+    if (titleEl) {
+        if (isWeilitsai) {
+            titleEl.style.display = 'none'; // 隐藏原本顶部的标签
+        } else {
+            titleEl.style.display = '';
+            titleEl.textContent = '上期开奖特码';
+        }
+    }
 
+    if (isWeilitsai) {
+        const latestNum = data.latest_num || '??';
+        const latestNumbers = data.latest_numbers || [];
         const iconEl = document.getElementById('latest-zodiac-icon');
         const infoEl = document.getElementById('latest-special-info');
-
-        if (iconEl) iconEl.textContent = emoji;
+        if (iconEl) iconEl.textContent = '🎫';
         if (infoEl) {
-            const color = getBallColorHex(num);
-            const darkColor = color === '#ef4444' ? '#d30000' : (color === '#3b82f6' ? '#0055d3' : (color === '#22c55e' ? '#00d34b' : '#d4a017'));
+            const regularBallsHtml = latestNumbers.map(num => {
+                return `<span class="overview-ball" style="display: inline-flex; align-items: center; justify-content: center; background: radial-gradient(circle at 30% 30%, #22c55e, #15803d); border-radius: 50%; color: #ffffff !important; -webkit-text-fill-color: #ffffff; font-weight: 900; font-family: Arial, Helvetica, sans-serif; box-shadow: 0 3px 8px rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.4); line-height: 1; text-shadow: 1px 1px 0 rgba(0,0,0,0.5); width: 28px; height: 28px; font-size: 0.85rem;">${num}</span>`;
+            }).join('');
+            
+            const specialBallHtml = `<span class="overview-ball" style="display: inline-flex; align-items: center; justify-content: center; background: radial-gradient(circle at 30% 30%, #3b82f6, #0055d3); border-radius: 50%; color: #ffffff !important; -webkit-text-fill-color: #ffffff; font-weight: 900; font-family: Arial, Helvetica, sans-serif; box-shadow: 0 3px 8px rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.4); line-height: 1; text-shadow: 1px 1px 0 rgba(0,0,0,0.5); width: 28px; height: 28px; font-size: 0.85rem;">${latestNum}</span>`;
+            
             infoEl.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 12px; margin-top: 4px;">
-                    <span class="overview-ball" style="display: inline-flex; align-items: center; justify-content: center; background: radial-gradient(circle at 30% 30%, ${color}, ${darkColor}); border-radius: 50%; color: #ffffff !important; -webkit-text-fill-color: #ffffff; font-weight: 900; font-family: Arial, Helvetica, sans-serif; box-shadow: 0 3px 8px rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.4); line-height: 1; text-shadow: 1px 1px 0 rgba(0,0,0,0.5);">${num}</span>
-                    <span style="font-size: 1.2rem; color: #f3f4f6; font-weight: 800; letter-spacing: 1px;">${zodiac}</span>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+                        ${regularBallsHtml}
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span style="font-size: 1rem; color: #a1a1aa; font-weight: bold;">+</span>
+                        ${specialBallHtml}
+                        <span style="font-size: 0.8rem; color: #9ca3af; font-weight: bold; margin-left: 4px;">上期开奖号码</span>
+                    </div>
                 </div>
             `;
+        }
+    } else {
+        if (data.markov && data.markov.target_num) {
+            const zEmoji = { '鼠': '🐭', '牛': '🐮', '虎': '🐯', '兔': '🐰', '龙': '🐲', '蛇': '🐍', '马': '🐴', '羊': '🐑', '猴': '🐵', '鸡': '🐔', '狗': '🐶', '猪': '猪' };
+            const num = data.markov.target_num;
+            const zodiac = data.markov.target_zodiac || '未知';
+            const emoji = zEmoji[zodiac] || '🎰';
+
+            const iconEl = document.getElementById('latest-zodiac-icon');
+            const infoEl = document.getElementById('latest-special-info');
+
+            if (iconEl) iconEl.textContent = emoji;
+            if (infoEl) {
+                const color = getBallColorHex(num);
+                const darkColor = color === '#ef4444' ? '#d30000' : (color === '#3b82f6' ? '#0055d3' : (color === '#22c55e' ? '#00d34b' : '#d4a017'));
+                infoEl.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 12px; margin-top: 4px;">
+                        <span class="overview-ball" style="display: inline-flex; align-items: center; justify-content: center; background: radial-gradient(circle at 30% 30%, ${color}, ${darkColor}); border-radius: 50%; color: #ffffff !important; -webkit-text-fill-color: #ffffff; font-weight: 900; font-family: Arial, Helvetica, sans-serif; box-shadow: 0 3px 8px rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.4); line-height: 1; text-shadow: 1px 1px 0 rgba(0,0,0,0.5);">${num}</span>
+                        <span style="font-size: 1.2rem; color: #f3f4f6; font-weight: 800; letter-spacing: 1px;">${zodiac}</span>
+                    </div>
+                `;
+            }
         }
     }
 
     // 渲染图表 —— 分批渲染，避免长时间阻塞主线程
-    window.__colorHotCold = data.color_hot_cold;
+    window.__colorHotCold = isWeilitsai ? null : data.color_hot_cold;
     window.__markovData = data.markov;
 
-    const chartTasks = [
+    const chartTasks = isWeilitsai ? [
+        () => renderFrequencyChart(data.number_frequency_z1),
+        () => renderHotColdRanking(data.hot_cold_z1),
+        () => renderPredictProbChart(data.predict_probabilities_z1),
+        () => renderOddEvenChart(data.odd_even_z2),
+        () => renderBigSmallChart(data.big_small_z2),
+        () => renderTailChart(data.tail_numbers_z1),
+        () => renderMarkovChart(data.markov),
+        () => renderBayesianChart(data.bayesian),
+        () => renderLSTMChart(data.lstm),
+    ] : [
         () => renderFrequencyChart(data.number_frequency),
         () => renderHotColdRanking(data.hot_cold),
         () => renderColorHotCold(data.color_hot_cold),
@@ -589,75 +708,146 @@ function renderFrequencyChart(frequency) {
     });
 }
 
+// ===== 第一区预测概率分布图 =====
+function renderPredictProbChart(predictProb) {
+    const ctx = document.getElementById('chart-predict-prob').getContext('2d');
+
+    if (!predictProb || predictProb.length === 0) return;
+
+    // 只展示概率最高的前 15 个号码
+    const sorted = [...predictProb].sort((a, b) => b.probability - a.probability).slice(0, 15);
+
+    const labels = sorted.map(item => `${item.number}号`);
+    const values = sorted.map(item => item.probability);
+
+    // 为不同状态的号码分配不同颜色：预警号码用红色，斜连邻号用黄色，普通号码用蓝色
+    const backgroundColors = sorted.map(item => {
+        if (item.is_alert) return 'rgba(239, 68, 68, 0.8)';
+        if (item.is_neighbor) return 'rgba(245, 158, 11, 0.8)';
+        return 'rgba(59, 130, 246, 0.8)';
+    });
+
+    if (state.charts.predictProb) state.charts.predictProb.destroy();
+
+    state.charts.predictProb = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '下期推算概率 (%)',
+                data: values,
+                backgroundColor: backgroundColors,
+                borderRadius: 3,
+                borderSkipped: false
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(17, 24, 39, 0.95)',
+                    titleColor: '#f5c842',
+                    borderColor: 'rgba(245, 200, 66, 0.3)',
+                    borderWidth: 1,
+                    cornerRadius: 8,
+                    padding: 12,
+                    callbacks: {
+                        label: function (ctx) {
+                            const idx = ctx.dataIndex;
+                            const item = sorted[idx];
+                            let extra = '';
+                            if (item.is_alert) extra += ' (⚠️遗漏警报号)';
+                            if (item.is_neighbor) extra += ' (邻近斜连号)';
+                            return ` 推算概率: ${ctx.raw}%${extra}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { display: false }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(255,255,255,0.04)' },
+                    ticks: {
+                        callback: function (value) {
+                            return value + '%';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
 // ===== 冷热号排行 =====
 function renderHotColdRanking(hotCold) {
-    const hotContainer = document.getElementById('hot-numbers');
-    const coldContainer = document.getElementById('cold-numbers');
-
-    const maxCount = Math.max(
-        ...hotCold.hot.map(h => h.count),
-        ...hotCold.cold.map(c => c.count)
-    );
+    const gridContainer = document.getElementById('hot-cold-grid');
+    if (!gridContainer) return;
 
     const overallMaxOmission = Math.max(
         ...hotCold.hot.map(h => h.omission),
         ...hotCold.cold.map(c => c.omission)
     );
 
-    hotContainer.innerHTML = hotCold.hot.map((item, i) => {
+    let html = '';
+
+    // 1. 排名行
+    html += `
+    <div style="display: flex; align-items: center; justify-content: center; font-size: 0.85rem; font-weight: bold; color: #a1a1aa; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 6px; height: 38px;">排名</div>
+    `;
+    for (let i = 1; i <= 10; i++) {
+        html += `
+        <div style="display: flex; align-items: center; justify-content: center; font-size: 0.85rem; font-weight: bold; color: #a1a1aa; height: 38px;">#${i}</div>
+        `;
+    }
+
+    // 2. 热号行
+    html += `
+    <div style="display: flex; align-items: center; justify-content: center; font-size: 0.95rem; font-weight: bold; color: #ef4444; background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.15); border-radius: 8px; padding: 8px 4px; text-align: center; min-height: 115px;">🔥 热号</div>
+    `;
+    hotCold.hot.forEach((item) => {
         const colorHex = getBallColorHex(item.number);
-        // 如果遗漏超过25期，高亮警告
+        const darkColorHex = colorHex === '#ef4444' ? '#d30000' : (colorHex === '#3b82f6' ? '#0055d3' : (colorHex === '#22c55e' ? '#00d34b' : '#d4a017'));
         const omissionStyle = item.omission >= 25 ? 'color:#f87171;font-weight:bold;' : 'color:#9ca3af;';
         const omissionText = item.omission > 0 ? `遗漏${item.omission}期` : '上期开出';
         const isMaxOmission = item.omission === overallMaxOmission && overallMaxOmission > 0;
+        const maxOmissionStyle = isMaxOmission ? 'box-shadow: 0 0 10px rgba(245, 200, 66, 0.6); border-color: rgba(245, 200, 66, 0.8) !important;' : '';
 
-        // 即使出现次数为0，也要给最大遗漏的一个可见宽度以展示动画
-        const displayWidth = isMaxOmission ? Math.max(15, (item.count / maxCount * 100)) : (item.count / maxCount * 100);
-
-        return `
-        <div class="rank-item hot">
-            <span class="rank-pos">${i + 1}</span>
-            <span class="rank-number" style="display: inline-flex; align-items: center; gap: 6px;">
-                <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${colorHex};flex-shrink:0;"></span>
-                ${item.number}
-            </span>
-            <div class="rank-bar-wrapper" style="flex:1; display:flex; flex-direction:column; justify-content:center; margin-left:8px; margin-right:8px;">
-                <div class="rank-bar">
-                    <div class="rank-bar-fill ${isMaxOmission ? 'pulse-glow' : ''}" style="width: ${displayWidth.toFixed(1)}%; ${isMaxOmission ? 'box-shadow: 0 0 15px rgba(245, 200, 66, 0.8) inset, 0 0 20px rgba(245, 200, 66, 0.6); background: #f5c842 !important;' : ''}"></div>
-                </div>
-            </div>
-            <div style="display:flex; flex-direction:column; align-items:flex-end; min-width:50px;">
-                <span class="rank-count">${item.count}次</span>
-                <span style="font-size:0.6rem; ${omissionStyle}">${omissionText}</span>
-            </div>
+        html += `
+        <div class="rank-item hot ${isMaxOmission ? 'pulse-glow' : ''}" style="display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 10px 4px; border-radius: 8px; text-align: center; gap: 8px; min-height: 115px; ${maxOmissionStyle}">
+            <span class="overview-ball" style="display: inline-flex; align-items: center; justify-content: center; background: radial-gradient(circle at 30% 30%, ${colorHex}, ${darkColorHex}); border-radius: 50%; color: #ffffff !important; -webkit-text-fill-color: #ffffff; font-weight: 900; font-family: Arial, Helvetica, sans-serif; box-shadow: 0 3px 8px rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.4); width: 32px; height: 32px; font-size: 0.95rem; line-height: 1; text-shadow: 1px 1px 0 rgba(0,0,0,0.5);">${item.number}</span>
+            <span class="rank-count" style="font-size: 0.85rem; font-weight: bold; color: #f3f4f6; line-height: 1; min-width: auto; text-align: center;">${item.count}次</span>
+            <span style="font-size: 0.72rem; line-height: 1; ${omissionStyle}">${omissionText}</span>
         </div>
-    `}).join('');
+        `;
+    });
 
-    coldContainer.innerHTML = hotCold.cold.map((item, i) => {
+    // 3. 冷号行
+    html += `
+    <div style="display: flex; align-items: center; justify-content: center; font-size: 0.95rem; font-weight: bold; color: #3b82f6; background: rgba(59, 130, 246, 0.06); border: 1px solid rgba(59, 130, 246, 0.15); border-radius: 8px; padding: 8px 4px; text-align: center; min-height: 115px;">❄️ 冷号</div>
+    `;
+    hotCold.cold.forEach((item) => {
         const colorHex = getBallColorHex(item.number);
-        // 如果遗漏超过50期，极度高亮
+        const darkColorHex = colorHex === '#ef4444' ? '#d30000' : (colorHex === '#3b82f6' ? '#0055d3' : (colorHex === '#22c55e' ? '#00d34b' : '#d4a017'));
         const omissionStyle = item.omission >= 50 ? 'color:#ef4444;font-weight:900;' : (item.omission >= 25 ? 'color:#f87171;' : 'color:#9ca3af;');
+        const omissionText = item.omission > 0 ? `遗漏${item.omission}期` : '上期开出';
         const isMaxOmission = item.omission === overallMaxOmission && overallMaxOmission > 0;
-        const displayWidth = isMaxOmission ? Math.max(15, (item.count / maxCount * 100)) : (item.count / maxCount * 100);
+        const maxOmissionStyle = isMaxOmission ? 'box-shadow: 0 0 10px rgba(245, 200, 66, 0.6); border-color: rgba(245, 200, 66, 0.8) !important;' : '';
 
-        return `
-        <div class="rank-item cold">
-            <span class="rank-pos">${i + 1}</span>
-            <span class="rank-number" style="display: inline-flex; align-items: center; gap: 6px;">
-                <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${colorHex};flex-shrink:0;"></span>
-                ${item.number}
-            </span>
-            <div class="rank-bar-wrapper" style="flex:1; display:flex; flex-direction:column; justify-content:center; margin-left:8px; margin-right:8px;">
-                <div class="rank-bar">
-                    <div class="rank-bar-fill ${isMaxOmission ? 'pulse-glow' : ''}" style="width: ${displayWidth.toFixed(1)}%; ${isMaxOmission ? 'box-shadow: 0 0 15px rgba(245, 200, 66, 0.8) inset, 0 0 20px rgba(245, 200, 66, 0.6); background: #f5c842 !important;' : ''}"></div>
-                </div>
-            </div>
-            <div style="display:flex; flex-direction:column; align-items:flex-end; min-width:50px;">
-                <span class="rank-count">${item.count}次</span>
-                <span style="font-size:0.6rem; ${omissionStyle}">遗漏${item.omission}期</span>
-            </div>
+        html += `
+        <div class="rank-item cold ${isMaxOmission ? 'pulse-glow' : ''}" style="display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 10px 4px; border-radius: 8px; text-align: center; gap: 8px; min-height: 115px; ${maxOmissionStyle}">
+            <span class="overview-ball" style="display: inline-flex; align-items: center; justify-content: center; background: radial-gradient(circle at 30% 30%, ${colorHex}, ${darkColorHex}); border-radius: 50%; color: #ffffff !important; -webkit-text-fill-color: #ffffff; font-weight: 900; font-family: Arial, Helvetica, sans-serif; box-shadow: 0 3px 8px rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.4); width: 32px; height: 32px; font-size: 0.95rem; line-height: 1; text-shadow: 1px 1px 0 rgba(0,0,0,0.5);">${item.number}</span>
+            <span class="rank-count" style="font-size: 0.85rem; font-weight: bold; color: #f3f4f6; line-height: 1; min-width: auto; text-align: center;">${item.count}次</span>
+            <span style="font-size: 0.72rem; line-height: 1; ${omissionStyle}">遗漏${item.omission}期</span>
         </div>
-    `}).join('');
+        `;
+    });
+
+    gridContainer.innerHTML = html;
 }
 
 // ===== 波色冷热切换事件 =====
@@ -803,8 +993,8 @@ function renderOddEvenChart(oddEven) {
                     grid: { color: 'rgba(255,255,255,0.05)' },
                     ticks: {
                         callback: function (value) {
-                            if (value > 0) return '+' + value + ' 奇';
-                            if (value < 0) return Math.abs(value) + ' 偶';
+                            if (value > 0) return '+' + value + ' 期奇';
+                            if (value < 0) return Math.abs(value) + ' 期偶';
                             return '0';
                         }
                     }
@@ -865,8 +1055,8 @@ function renderBigSmallChart(bigSmall) {
                     grid: { color: 'rgba(255,255,255,0.05)' },
                     ticks: {
                         callback: function (value) {
-                            if (value > 0) return '+' + value + ' 大';
-                            if (value < 0) return Math.abs(value) + ' 小';
+                            if (value > 0) return '+' + value + ' 期大';
+                            if (value < 0) return Math.abs(value) + ' 期小';
                             return '0';
                         }
                     }
@@ -1012,64 +1202,87 @@ function renderMarkovChart(markovData) {
     const canvas = document.getElementById('chart-markov-radar');
     if (!canvas || !markovData) return;
 
-    // 获取当前模式
-    const modeEl = document.querySelector('input[name="markov_mode"]:checked');
-    const mode = modeEl ? modeEl.value : 'zodiac';
+    const isWeilitsai = state.lotteryType === 'weilitsai';
+    const parentCard = canvas.closest('.chart-card') || canvas.closest('.card');
+    const titleEl = parentCard ? parentCard.querySelector('.chart-title') : null;
+    if (titleEl) {
+        titleEl.textContent = isWeilitsai ? '🕸️ 马尔可夫链 1区号码转移概率分布' : '🕸️ 马尔可夫链特码状态转移';
+    }
+
+    let mode = 'zodiac';
+    if (isWeilitsai) {
+        mode = 'number';
+    } else {
+        const modeEl = document.querySelector('input[name="markov_mode"]:checked');
+        mode = modeEl ? modeEl.value : 'zodiac';
+    }
 
     // 基础数据
     let targetDesc = '';
     let targetStr = '??';
-    let weights = {};
+    let weights = markovData.weights || {};
     let labels = [];
     let backgroundColors = [];
+    let occurrences = weights._occurrences || {};
 
-    if (mode === 'zodiac') {
+    if (isWeilitsai) {
+        targetDesc = '1区正码';
+        targetStr = '';
+        labels = Array.from({length: 38}, (_, i) => (i + 1).toString());
+        backgroundColors = labels.map(() => 'rgba(59, 130, 246, 0.7)');
+    } else if (mode === 'zodiac') {
         targetDesc = markovData.target_zodiac || '未知';
         targetStr = markovData.target_num || '??';
-        weights = markovData.weights || {};
         labels = ["鼠", "牛", "虎", "兔", "龙", "蛇", "马", "羊", "猴", "鸡", "狗", "猪"];
     } else {
         targetDesc = markovData.target_color || '未知';
         targetStr = markovData.target_color || '??';
         weights = markovData.color_weights || {};
         labels = ["红波", "蓝波", "绿波"];
+        occurrences = weights._occurrences || {};
     }
 
     const maxPeriods = weights.max_periods || 0;
     const periodStr = maxPeriods > 0 ? `近${maxPeriods}期` : '全历史数据';
 
-    const parentCard = document.querySelector('#chart-markov-radar').closest('.chart-card') || document.querySelector('#chart-markov-radar').closest('.card');
     const descEl = parentCard ? parentCard.querySelector('p') : null;
     if (descEl) {
-        descEl.innerHTML = `<span class="text-blue-400 font-bold">【概率推演】</span> 基于历史数据推演出真实的转移概率分布。雷达轴越突出的维度，历史跃迁倾向越强。（统计基准：${periodStr}）`;
+        descEl.innerHTML = `<span class="text-blue-400 font-bold">【概率推演】</span> 基于历史数据推演出真实的转移概率分布。${isWeilitsai ? '号码条形柱越突出，下一期开出倾向越强。' : '雷达轴越突出的维度，历史跃迁倾向越强。'}（统计基准：${periodStr}）`;
     }
 
     const values = labels.map(key => weights[key] || 1.0);
     const maxVal = Math.max(...values);
 
-    const occurrences = weights['_occurrences'] || {};
     const counts = labels.map(key => occurrences[key] || 0);
     const maxCount = Math.max(...counts);
     const avgCount = counts.length > 0 ? (counts.reduce((a, b) => a + b, 0) / counts.length) : 1;
 
-    if (mode === 'zodiac') {
-        backgroundColors = counts.map(count => {
-            if (count === maxCount && count > avgCount * 1.2) return 'rgba(239, 68, 68, 0.7)';
-            if (count > avgCount * 1.1) return 'rgba(245, 158, 11, 0.6)';
-            if (count < avgCount * 0.7) return 'rgba(59, 130, 246, 0.4)';
-            return 'rgba(156, 163, 175, 0.4)';
-        });
-    } else {
-        backgroundColors = labels.map(colorName => {
-            if (colorName === '红波') return 'rgba(239, 68, 68, 0.75)';
-            if (colorName === '蓝波') return 'rgba(59, 130, 246, 0.75)';
-            if (colorName === '绿波') return 'rgba(34, 197, 94, 0.75)';
-            return 'rgba(156, 163, 175, 0.4)';
-        });
+    if (!isWeilitsai) {
+        if (mode === 'zodiac') {
+            backgroundColors = counts.map(count => {
+                if (count === maxCount && count > avgCount * 1.2) return 'rgba(239, 68, 68, 0.7)';
+                if (count > avgCount * 1.1) return 'rgba(245, 158, 11, 0.6)';
+                if (count < avgCount * 0.7) return 'rgba(59, 130, 246, 0.4)';
+                return 'rgba(156, 163, 175, 0.4)';
+            });
+        } else {
+            backgroundColors = labels.map(colorName => {
+                if (colorName === '红波') return 'rgba(239, 68, 68, 0.75)';
+                if (colorName === '蓝波') return 'rgba(59, 130, 246, 0.75)';
+                if (colorName === '绿波') return 'rgba(34, 197, 94, 0.75)';
+                return 'rgba(156, 163, 175, 0.4)';
+            });
+        }
+    }
+
+    const radioContainer = parentCard ? parentCard.querySelector('.algorithm-toggle') : null;
+    if (radioContainer) {
+        radioContainer.style.display = isWeilitsai ? 'none' : '';
     }
 
     const chartWrapper = canvas.parentElement;
     chartWrapper.style.position = 'relative';
+    chartWrapper.style.height = isWeilitsai ? '250px' : '360px';
 
     let layoutBox = chartWrapper.parentElement;
     if (!layoutBox.classList.contains('markov-layout-box')) {
@@ -1135,63 +1348,63 @@ function renderMarkovChart(markovData) {
         return col;
     };
 
-    if (mode === 'zodiac') {
-        layoutBox.insertBefore(createLegendCol(labels.slice(0, 6), 0), chartWrapper);
-        layoutBox.appendChild(createLegendCol(labels.slice(6, 12), 6));
-    } else {
-        layoutBox.insertBefore(createLegendCol(labels.slice(0, 2), 0), chartWrapper);
-        layoutBox.appendChild(createLegendCol(labels.slice(2, 3), 2));
+    if (!isWeilitsai) {
+        if (mode === 'zodiac') {
+            layoutBox.insertBefore(createLegendCol(labels.slice(0, 6), 0), chartWrapper);
+            layoutBox.appendChild(createLegendCol(labels.slice(6, 12), 6));
+        } else {
+            layoutBox.insertBefore(createLegendCol(labels.slice(0, 2), 0), chartWrapper);
+            layoutBox.appendChild(createLegendCol(labels.slice(2, 3), 2));
+        }
     }
 
     const oldCenter = chartWrapper.querySelector('.markov-center-label');
     if (oldCenter) oldCenter.remove();
 
-    const centerLabel = document.createElement('div');
-    centerLabel.className = 'markov-center-label';
-    centerLabel.style.position = 'absolute';
-    centerLabel.style.top = '50%';
-    centerLabel.style.left = '50%';
-    centerLabel.style.transform = 'translate(-50%, -50%)';
-    centerLabel.style.width = '56px';
-    centerLabel.style.height = '56px';
-    centerLabel.style.borderRadius = '50%';
+    if (!isWeilitsai && markovData.target_num) {
+        const centerLabel = document.createElement('div');
+        centerLabel.className = 'markov-center-label';
+        centerLabel.style.position = 'absolute';
+        centerLabel.style.top = '50%';
+        centerLabel.style.left = '50%';
+        centerLabel.style.transform = 'translate(-50%, -50%)';
+        centerLabel.style.width = '56px';
+        centerLabel.style.height = '56px';
+        centerLabel.style.borderRadius = '50%';
 
-    let centerBg = 'rgba(15, 23, 42, 0.95)';
-    if (mode === 'color') {
-        if (targetStr === '红波') centerBg = 'rgba(239, 68, 68, 0.85)';
-        else if (targetStr === '蓝波') centerBg = 'rgba(59, 130, 246, 0.85)';
-        else if (targetStr === '绿波') centerBg = 'rgba(34, 197, 94, 0.85)';
+        let centerBg = 'rgba(15, 23, 42, 0.95)';
+        if (mode === 'color') {
+            if (targetStr === '红波') centerBg = 'rgba(239, 68, 68, 0.85)';
+            else if (targetStr === '蓝波') centerBg = 'rgba(59, 130, 246, 0.85)';
+            else if (targetStr === '录波' || targetStr === '绿波') centerBg = 'rgba(34, 197, 94, 0.85)';
+        }
+        centerLabel.style.backgroundColor = centerBg;
+
+        centerLabel.style.display = 'flex';
+        centerLabel.style.alignItems = 'center';
+        centerLabel.style.justifyContent = 'center';
+        centerLabel.style.flexDirection = 'column';
+        centerLabel.style.color = '#fff';
+        centerLabel.style.border = '2px solid rgba(255, 255, 255, 0.15)';
+        centerLabel.style.boxShadow = '0 4px 12px rgba(0,0,0,0.5)';
+        centerLabel.style.zIndex = '99';
+        centerLabel.style.pointerEvents = 'none';
+
+        const centerText = mode === 'zodiac' ? targetStr : targetStr.replace('波', '');
+        centerLabel.innerHTML = `
+            <span class="mc-number" style="position: relative; z-index: 100; font-size: ${mode === 'color' ? '1.1rem' : '1.4rem'}; font-weight: bold; line-height: 1;">${centerText}</span>
+        `;
+        chartWrapper.appendChild(centerLabel);
     }
-    centerLabel.style.backgroundColor = centerBg;
-
-    centerLabel.style.display = 'flex';
-    centerLabel.style.alignItems = 'center';
-    centerLabel.style.justifyContent = 'center';
-    centerLabel.style.flexDirection = 'column';
-    centerLabel.style.color = '#fff';
-    centerLabel.style.border = '2px solid rgba(255, 255, 255, 0.15)';
-    centerLabel.style.boxShadow = '0 4px 12px rgba(0,0,0,0.5)';
-    centerLabel.style.zIndex = '99';
-    centerLabel.style.pointerEvents = 'none';
-
-    const centerText = mode === 'zodiac' ? targetStr : targetStr.replace('波', '');
-    centerLabel.innerHTML = `
-        <span class="mc-number" style="position: relative; z-index: 100; font-size: ${mode === 'color' ? '1.1rem' : '1.4rem'}; font-weight: bold; line-height: 1;">${centerText}</span>
-    `;
-
-    if (!markovData.target_num) {
-        centerLabel.style.display = 'none';
-    }
-    chartWrapper.appendChild(centerLabel);
 
     if (state.charts.markov) state.charts.markov.destroy();
 
     state.charts.markov = new Chart(canvas, {
-        type: 'polarArea',
+        type: isWeilitsai ? 'bar' : 'polarArea',
         data: {
             labels: labels,
             datasets: [{
-                label: `上期开出【${targetDesc}】的跃迁权重`,
+                label: isWeilitsai ? '转移跃迁权重' : `上期开出【${targetDesc}】的跃迁权重`,
                 data: values,
                 backgroundColor: backgroundColors,
                 borderWidth: 1,
@@ -1202,7 +1415,18 @@ function renderMarkovChart(markovData) {
             responsive: true,
             maintainAspectRatio: false,
             layout: { padding: 10 },
-            scales: {
+            scales: isWeilitsai ? {
+                x: {
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#9ca3af' }
+                },
+                y: {
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#9ca3af' },
+                    min: 0.4,
+                    max: 2.6
+                }
+            } : {
                 r: {
                     angleLines: { color: 'rgba(255,255,255,0.05)' },
                     grid: { color: 'rgba(255,255,255,0.05)' },
@@ -1222,8 +1446,8 @@ function renderMarkovChart(markovData) {
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    enabled: false,
-                    external: function (context) {
+                    enabled: isWeilitsai,
+                    external: isWeilitsai ? null : function (context) {
                         let tooltipEl = chartWrapper.querySelector('.markov-tooltip');
                         if (!tooltipEl) {
                             tooltipEl = document.createElement('div');
@@ -1255,6 +1479,7 @@ function renderMarkovChart(markovData) {
         plugins: [{
             id: 'markovSliceGlow',
             afterDraw: (chart) => {
+                if (state.lotteryType === 'weilitsai') return;
                 const maxVal = Math.max(...values);
                 if (maxVal === 0) return;
 
@@ -1528,7 +1753,19 @@ function renderBayesianChart(bayesianData) {
     if (!canvas || !bayesianData || bayesianData.length === 0) return;
     const ctx = canvas.getContext('2d');
 
-    const labels = bayesianData.map(d => d.zodiac);
+    const isWeilitsai = state.lotteryType === 'weilitsai';
+    const titleEl = canvas.closest('.chart-card')?.querySelector('.chart-title');
+    if (titleEl) {
+        titleEl.textContent = isWeilitsai ? '⚖️ 1区号码贝叶斯后验反弹图' : '⚖️ 贝叶斯遗漏反弹推测';
+    }
+    const descEl = canvas.closest('.chart-card')?.querySelector('p');
+    if (descEl) {
+        descEl.innerHTML = isWeilitsai
+            ? `<strong class="text-blue-400">【动态概率更新】</strong>结合历史号码先验概率，利用1区号码最新遗漏极值作为证据，修正后验分布。推算1区号码在下期“触底反弹”的条件概率权重。`
+            : `<strong class="text-blue-400">【动态概率更新】</strong>结合历史基础概率（先验），利用最新遗漏极值（新证据）不断修正后验概率。推算生肖在下期“触底反弹”的条件概率权重。`;
+    }
+
+    const labels = bayesianData.map(d => d.number !== undefined ? d.number.toString() : d.zodiac);
     const posteriorData = bayesianData.map(d => d.posterior);
     const omissionData = bayesianData.map(d => d.omission);
 
@@ -1776,7 +2013,19 @@ function renderLSTMChart(lstmData) {
     if (!canvas || !lstmData || lstmData.length === 0) return;
     const ctx = canvas.getContext('2d');
 
-    const labels = lstmData.map(d => d.zodiac);
+    const isWeilitsai = state.lotteryType === 'weilitsai';
+    const titleEl = canvas.closest('.chart-card')?.querySelector('.chart-title');
+    if (titleEl) {
+        titleEl.textContent = isWeilitsai ? '🧠 1区号码神经网络 (MLP) 拟合图' : '🧠 LSTM 时序模拟与网络拟合度';
+    }
+    const descEl = canvas.closest('.chart-card')?.querySelector('p');
+    if (descEl) {
+        descEl.innerHTML = isWeilitsai 
+            ? `<strong class="text-green-400">【非线性模式挖掘】</strong>将1区38个号码的频次与遗漏特征放入多层感知机网络进行特征拟合，预测下期开出倾向。<strong>局限性说明：</strong>纯随机噪音下，模型极易发生“过拟合”从而导致推演失效。`
+            : `<strong class="text-green-400">【非线性模式挖掘】</strong>将生肖走势放入时间序列网络，寻找肉眼难辨的复杂周期。<strong>局限性说明：</strong>遇到纯随机噪音时，模型极易发生“过拟合”从而导致推演失效。`;
+    }
+
+    const labels = lstmData.map(d => d.number !== undefined ? d.number.toString() : d.zodiac);
     const scoreData = lstmData.map(d => d.score);
     const signalData = lstmData.map(d => d.signal);
 
@@ -2026,15 +2275,29 @@ async function loadHistory(page) {
 
 function renderHistory(data) {
     const tbody = document.getElementById('history-tbody');
+    const isWeilitsai = state.lotteryType === 'weilitsai';
 
     tbody.innerHTML = data.data.map(row => {
         const sz = row.special_zodiac || '';
-        const colorClass = getBallColorClass(row.special_num) || 'special';
+        const colorClass = getBallColorClass(row.special_num, isWeilitsai ? 2 : 1) || 'special';
+        
+        // 渲染 6 个正码球
+        const regularBalls = (row.numbers || [])
+            .map(num => {
+                const ballColor = getBallColorClass(num, 1) || 'regular';
+                return `<span class="table-ball ${ballColor}" style="margin: 0 2px; width: 28px; height: 28px; line-height: 28px; font-size: 0.85rem;">${num}</span>`;
+            }).join('');
+
         return `
             <tr>
                 <td>${row.draw_number}</td>
                 <td>${row.draw_date}</td>
-                <td>
+                <td style="text-align: center;">
+                    <div class="ball-wrapper" style="flex-direction: row; align-items: center; justify-content: center; width: 100%; gap: 4px; flex-wrap: wrap;">
+                        ${regularBalls}
+                    </div>
+                </td>
+                <td style="text-align: center;">
                     <div class="ball-wrapper" style="flex-direction: row; align-items: center; justify-content: center; width: 100%; gap: 8px;">
                         ${sz ? `<span class="zodiac-label" style="font-size: 0.9rem; font-weight: 600; color: #fbbf24;">${sz}</span>` : ''}
                         <span class="table-ball ${colorClass}" style="margin: 0;">${row.special_num}</span>

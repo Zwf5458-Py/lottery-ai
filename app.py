@@ -650,11 +650,15 @@ def api_simulate():
             ai_result = analyze_with_ai(stats, lottery_type, dimensions)
 
             # 为 AI 结果补充生肖映射
-            z_map = get_zodiac_mapping(lottery_type)
-            if "numbers" in ai_result and ai_result["numbers"]:
-                ai_result["zodiacs"] = [z_map.get(n, "") for n in ai_result["numbers"]]
-            if "special_num" in ai_result and ai_result["special_num"]:
-                ai_result["special_zodiac"] = z_map.get(ai_result["special_num"], "")
+            if lottery_type != 'weilitsai':
+                z_map = get_zodiac_mapping(lottery_type)
+                if "numbers" in ai_result and ai_result["numbers"]:
+                    ai_result["zodiacs"] = [z_map.get(n, "") for n in ai_result["numbers"]]
+                if "special_num" in ai_result and ai_result["special_num"]:
+                    ai_result["special_zodiac"] = z_map.get(ai_result["special_num"], "")
+            else:
+                ai_result["zodiacs"] = []
+                ai_result["special_zodiac"] = ""
 
             # ====== 新增：持久化 AI 推理过程到数据库 ======
             try:
