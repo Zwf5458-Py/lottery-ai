@@ -186,30 +186,42 @@ def _get_all_numbers_with_special(df: pd.DataFrame) -> list:
     return df['special_num'].tolist()
 
 
-def number_frequency(df: pd.DataFrame = None, periods: int = 100) -> dict:
+def number_frequency(df: pd.DataFrame = None, periods: int = 100, lottery_type: str = 'macaujc', zone: int = 1) -> dict:
     """
     号码出现频率分布
     返回: {号码: 出现次数} 的字典，按号码排序
     """
     if df is None:
-        df = clean_data(load_data())
+        df = clean_data(load_data(lottery_type))
     
     # 截取用户配置的统计期数
     if periods > 0:
         df = df.head(periods)
     
-    all_nums = _get_all_numbers_with_special(df)
+    if lottery_type == 'weilitsai':
+        if zone == 1:
+            all_nums = []
+            for col in ['n1', 'n2', 'n3', 'n4', 'n5', 'n6']:
+                if col in df.columns:
+                    all_nums.extend(df[col].tolist())
+            max_num = 38
+        else:
+            all_nums = df['special'].tolist() if 'special' in df.columns else []
+            max_num = 8
+    else:
+        all_nums = _get_all_numbers_with_special(df)
+        max_num = 49
+
     counter = Counter(all_nums)
     
-    # 确保 1-49 都有值
     result = {}
-    for i in range(1, 50):
+    for i in range(1, max_num + 1):
         result[i] = counter.get(i, 0)
     
     return result
 
 
-def hot_cold_numbers(top_n: int = 10, df: pd.DataFrame = None, periods: int = 100) -> dict:
+def hot_cold_numbers(top_n: int = 10, df: pd.DataFrame = None, periods: int = 100, lottery_type: str = 'macaujc', zone: int = 1) -> dict:
     """
     冷热号统计
     参数:
@@ -217,10 +229,10 @@ def hot_cold_numbers(top_n: int = 10, df: pd.DataFrame = None, periods: int = 10
     返回: {'hot': [{'number': n, 'count': c, 'omission': o}], ...}
     """
     if df is None:
-        df = clean_data(load_data())
+        df = clean_data(load_data(lottery_type))
     
     # 1. 统计频率 (基于指定的 periods)
-    freq = number_frequency(df, periods)
+    freq = number_frequency(df, periods, lottery_type, zone)
     sorted_nums = sorted(freq.items(), key=lambda x: x[1], reverse=True)
     
     # 2. 计算所有号码的当前遗漏值 (基于全量历史，确保捕捉到 139 期等真实的极致大冷号)
@@ -230,10 +242,40 @@ def hot_cold_numbers(top_n: int = 10, df: pd.DataFrame = None, periods: int = 10
     # 向量化计算：用 numpy 数组代替逐行 Python 循环 (O(N×49) -> O(N+49))
     import numpy as np
     df_sorted = df.sort_values(by=['draw_date', 'draw_number'], ascending=[False, False])
-    special_arr = df_sorted['special_num'].values.astype(int)
-    for num in range(1, 50):
-        indices = np.where(special_arr == num)[0]
-        omission_dict[num] = int(indices[0]) if len(indices) > 0 else len(special_arr)
+    
+    if lottery_type == 'weilitsai':
+        if zone == 1:
+            max_num = 38
+            # Compute omission for all n1-n6 columns
+            # It's a bit complex vectorization, fallback to rows if needed or use pandas
+            # Let's vectorize across n1-n6
+            # Get the matrix of n1-n6
+            if not df_sorted.empty and 'n1' in df_sorted.columns:
+                arr = df_sorted[['n1', 'n2', 'n3', 'n4', 'n5', 'n6']].values.astype(int)
+            else:
+                arr = np.array([])
+            
+            for num in range(1, max_num + 1):
+                if arr.size > 0:
+                    indices = np.where((arr == num).any(axis=1))[0]
+                    omission_dict[num] = int(indices[0]) if len(indices) > 0 else len(arr)
+                else:
+                    omission_dict[num] = 0
+        else:
+            max_num = 8
+            special_arr = df_sorted['special'].values.astype(int) if 'special' in df_sorted.columns else np.array([])
+            for num in range(1, max_num + 1):
+                if special_arr.size > 0:
+                    indices = np.where(special_arr == num)[0]
+                    omission_dict[num] = int(indices[0]) if len(indices) > 0 else len(special_arr)
+                else:
+                    omission_dict[num] = 0
+    else:
+        max_num = 49
+        special_arr = df_sorted['special_num'].values.astype(int)
+        for num in range(1, max_num + 1):
+            indices = np.where(special_arr == num)[0]
+            omission_dict[num] = int(indices[0]) if len(indices) > 0 else len(special_arr)
         
     hot_list = []
     for n, c in sorted_nums[:top_n]:
@@ -249,14 +291,23 @@ def hot_cold_numbers(top_n: int = 10, df: pd.DataFrame = None, periods: int = 10
     }
 
 
-def odd_even_ratio(df: pd.DataFrame = None, periods: int = 100) -> dict:
+
+def odd_even_ratio(df: pd.DataFrame = None, periods: int = 100, lottery_type: str = 'macaujc', zone: int = 2) -> dict:
     """
     特码单双时间轴 K 线数据
     """
     if df is None:
-        df = clean_data(load_data())
+        df = clean_data(load_data(lottery_type))
         
-    total_odd = df['special_num'].apply(lambda x: x % 2 == 1).sum()
+    if lottery_type == 'weilitsai':
+        target_col = 'special' if zone == 2 else 'n1' # just fallback to n1 if zone 1 is forced, though usually zone 2 is used
+    else:
+        target_col = 'special_num'
+
+    if target_col not in df.columns:
+        return {'labels': [], 'values': [], 'total_odd': 0, 'total_even': 0, 'current_jumps': 0}
+
+    total_odd = df[target_col].apply(lambda x: x % 2 == 1).sum()
     total_even = len(df) - total_odd
     
     df_recent = df.head(periods).iloc[::-1]
@@ -268,9 +319,9 @@ def odd_even_ratio(df: pd.DataFrame = None, periods: int = 100) -> dict:
     current_val = 0
     
     for _, row in df_recent.iterrows():
-        num = row['special_num']
+        num = row[target_col]
         is_odd = num % 2 == 1
-        labels.append(str(row['draw_number']))
+        labels.append(str(row['draw_issue'] if 'draw_issue' in row else row.get('draw_number', '')))
         
         if is_odd:
             if current_type == '奇':
@@ -312,14 +363,24 @@ def odd_even_ratio(df: pd.DataFrame = None, periods: int = 100) -> dict:
     }
 
 
-def big_small_ratio(df: pd.DataFrame = None, periods: int = 100) -> dict:
+def big_small_ratio(df: pd.DataFrame = None, periods: int = 100, lottery_type: str = 'macaujc', zone: int = 2) -> dict:
     """
     特码大小时间轴 K 线数据
     """
     if df is None:
-        df = clean_data(load_data())
+        df = clean_data(load_data(lottery_type))
     
-    total_big = df['special_num'].apply(lambda x: x >= 25).sum()
+    if lottery_type == 'weilitsai':
+        target_col = 'special' if zone == 2 else 'n1'
+        threshold = 5 if zone == 2 else 20
+    else:
+        target_col = 'special_num'
+        threshold = 25
+
+    if target_col not in df.columns:
+        return {'labels': [], 'values': [], 'total_big': 0, 'total_small': 0, 'current_jumps': 0}
+        
+    total_big = df[target_col].apply(lambda x: x >= threshold).sum()
     total_small = len(df) - total_big
     
     df_recent = df.head(periods).iloc[::-1]
@@ -331,9 +392,9 @@ def big_small_ratio(df: pd.DataFrame = None, periods: int = 100) -> dict:
     current_val = 0
     
     for _, row in df_recent.iterrows():
-        num = row['special_num']
-        is_big = num >= 25
-        labels.append(str(row['draw_number']))
+        num = row[target_col]
+        is_big = num >= threshold
+        labels.append(str(row['draw_issue'] if 'draw_issue' in row else row.get('draw_number', '')))
         
         if is_big:
             if current_type == '大':

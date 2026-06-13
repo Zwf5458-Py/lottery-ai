@@ -85,6 +85,27 @@ class TestNumberFrequency:
         for count in freq.values():
             assert isinstance(count, int)
 
+    def test_number_frequency_weilitsai(self):
+        import pandas as pd
+        
+        # Mock dataframe with weilitsai data
+        df = pd.DataFrame({
+            'lottery_type': ['weilitsai', 'weilitsai'],
+            'n1': [1, 2], 'n2': [2, 3], 'n3': [3, 4], 
+            'n4': [4, 5], 'n5': [5, 6], 'n6': [6, 7],
+            'special': [1, 8]
+        })
+        
+        # Test Zone 1
+        freq_z1 = number_frequency(df=df, lottery_type='weilitsai', zone=1)
+        assert freq_z1[1] > 0 and freq_z1[7] > 0
+        assert freq_z1.get(8, 0) == 0 # Special number shouldn't be here
+        
+        # Test Zone 2
+        freq_z2 = number_frequency(df=df, lottery_type='weilitsai', zone=2)
+        assert freq_z2[1] > 0 and freq_z2[8] > 0
+        assert freq_z2.get(2, 0) == 0
+
 
 class TestHotColdNumbers:
     """冷热号统计测试"""
