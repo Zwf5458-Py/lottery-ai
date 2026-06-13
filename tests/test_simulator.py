@@ -3,7 +3,8 @@ import pandas as pd
 from modules.simulator import simulate_single, build_cooccurrence_matrix
 
 def test_simulate_weilitsai(monkeypatch):
-    monkeypatch.setattr('modules.data_processor.load_data', lambda t: pd.DataFrame())
+    df = pd.DataFrame(columns=['num1', 'num2', 'num3', 'num4', 'num5', 'num6', 'special_num'])
+    monkeypatch.setattr('modules.data_processor.load_data', lambda t: df)
     
     result = simulate_single(lottery_type='weilitsai')
     
@@ -15,15 +16,32 @@ def test_simulate_weilitsai(monkeypatch):
 
 def test_build_cooccurrence_matrix():
     df = pd.DataFrame({
-        'n1': [1, 2, 1],
-        'n2': [2, 3, 3],
-        'n3': [3, 4, 4],
-        'n4': [4, 5, 5],
-        'n5': [5, 6, 6],
-        'n6': [6, 7, 7]
+        'num1': [1, 2, 1],
+        'num2': [2, 3, 3],
+        'num3': [3, 4, 4],
+        'num4': [4, 5, 5],
+        'num5': [5, 6, 6],
+        'num6': [6, 7, 7]
     })
     
-    matrix = build_cooccurrence_matrix(df, max_num=7, cols=['n1', 'n2', 'n3', 'n4', 'n5', 'n6'])
+    matrix = build_cooccurrence_matrix(df, max_num=7, cols=['num1', 'num2', 'num3', 'num4', 'num5', 'num6'])
     
     assert matrix[1][3] == 2
     assert matrix[2][1] == 1
+
+
+def test_simulate_single_constraints_and_clustering(monkeypatch):
+    df = pd.DataFrame({
+        'draw_date': pd.date_range(start='1/1/2023', periods=10),
+        'draw_number': range(1, 11),
+        'lottery_type': ['weilitsai'] * 10,
+        'num1': [1]*10, 'num2': [2]*10, 'num3': [3]*10, 'num4': [4]*10, 'num5': [5]*10, 'num6': [6]*10,
+        'special_num': [8]*10
+    })
+    
+    monkeypatch.setattr('modules.data_processor.load_data', lambda t: df)
+    
+    for _ in range(10):
+        res = simulate_single(lottery_type='weilitsai')
+        odds = sum(1 for x in res['numbers'] if x % 2 != 0)
+        assert odds in [2, 3, 4]

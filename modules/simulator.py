@@ -591,7 +591,7 @@ def _calculate_trend_weights(lottery_type: str = 'macaujc', dimensions: list = N
     return weight_cfg
 
 
-def _weighted_random_number(weights_config: dict, z_map: dict, is_special: bool = False, exclude_nums: set = None, max_num: int = 49) -> int:
+def _weighted_random_number(weights_config: dict, z_map: dict, is_special: bool = False, exclude_nums: set = None, max_num: int = 49, extra_weights_multiplier: dict = None) -> int:
     """结合走势与生肖权重生成单个号码"""
     candidates = list(range(1, max_num + 1))
     if exclude_nums:
@@ -645,9 +645,12 @@ def _weighted_random_number(weights_config: dict, z_map: dict, is_special: bool 
                 if color and color != '未知' and color in weights_config['color_weights']:
                     w *= weights_config['color_weights'][color]
                 
-        # 冷热权重（现在变为仅针对特码有效）
-        if is_special and num in weights_config.get('hot_cold_weights', {}):
+        # 冷热权重
+        if num in weights_config.get('hot_cold_weights', {}):
             w *= weights_config['hot_cold_weights'][num]
+            
+        if extra_weights_multiplier and num in extra_weights_multiplier:
+            w *= extra_weights_multiplier[num]
             
         weights.append(w)
         
@@ -680,18 +683,63 @@ def simulate_single(lottery_type: str = 'macaujc', dimensions: list = None) -> d
     带智能趋势及多维加权的模拟开奖
     dimensions: 启用的加权维度列表
     """
+    import pandas as pd
+    from modules.statistics_engine import calculate_omission_thresholds
+    from modules.data_processor import load_data, clean_data
+
     weights_config = _calculate_trend_weights(lottery_type, dimensions)
     z_map = get_zodiac_mapping(lottery_type)
     
     max_regular = 38 if lottery_type == 'weilitsai' else 49
     max_special = 8 if lottery_type == 'weilitsai' else 49
+
+    # Pre-calculate omissions and markov clustering based on history
+    df = clean_data(load_data(lottery_type))
+    cooccurrence = defaultdict(lambda: defaultdict(int))
     
-    numbers_set = set()
-    while len(numbers_set) < 6:
-        # 正码纯随机生成（确保不重复）
-        num = _weighted_random_number(weights_config, z_map, is_special=False, exclude_nums=numbers_set, max_num=max_regular)
-        numbers_set.add(num)
+    if not df.empty:
+        # Build Omission Boost
+        omissions = calculate_omission_thresholds(df, lottery_type, zone=1)
+        for num, data in omissions.items():
+            if data['is_alert']:
+                if 'hot_cold_weights' not in weights_config:
+                    weights_config['hot_cold_weights'] = {}
+                weights_config['hot_cold_weights'][num] = weights_config['hot_cold_weights'].get(num, 1.0) * 3.0
+                
+        # Build Co-occurrence matrix from recent draws
+        df_recent = df.head(500)
+        cols = ['num1', 'num2', 'num3', 'num4', 'num5', 'num6']
+        cooccurrence = build_cooccurrence_matrix(df_recent, max_regular, cols)
+
+    attempts = 0
+    max_attempts = 100
+    
+    while attempts < max_attempts:
+        numbers_set = set()
+        attempts += 1
         
+        # 1. Pick Core Number
+        core_num = _weighted_random_number(weights_config, z_map, is_special=False, exclude_nums=numbers_set, max_num=max_regular)
+        numbers_set.add(core_num)
+        
+        # 2. Build clustering multiplier based on core number
+        cluster_multiplier = {}
+        if core_num in cooccurrence:
+            for n2, count in cooccurrence[core_num].items():
+                if count > 0:
+                    cluster_multiplier[n2] = 1.0 + (count * 0.5) # Boost related numbers
+                    
+        # 3. Pick remaining numbers
+        while len(numbers_set) < 6:
+            num = _weighted_random_number(weights_config, z_map, is_special=False, exclude_nums=numbers_set, max_num=max_regular, extra_weights_multiplier=cluster_multiplier)
+            numbers_set.add(num)
+            
+        # 4. Odd/Even Constraint Check
+        odds = sum(1 for x in numbers_set if x % 2 != 0)
+        
+        if odds in [2, 3, 4]:
+            break # Valid ratio: 3:3, 2:4, or 4:2
+            
     numbers = sorted(list(numbers_set))
     
     exclude_special = numbers_set if lottery_type != 'weilitsai' else None
@@ -717,27 +765,10 @@ def simulate_batch(count: int = 10, lottery_type: str = 'macaujc', dimensions: l
     
     draws = []
     
-    weights_config = _calculate_trend_weights(lottery_type, dimensions)
-    z_map = get_zodiac_mapping(lottery_type)
-    
-    max_regular = 38 if lottery_type == 'weilitsai' else 49
-    max_special = 8 if lottery_type == 'weilitsai' else 49
-    
     for _ in range(count):
-        numbers_set = set()
-        while len(numbers_set) < 6:
-            numbers_set.add(_weighted_random_number(weights_config, z_map, is_special=False, exclude_nums=numbers_set, max_num=max_regular))
-            
-        numbers = sorted(list(numbers_set))
-        exclude_special = numbers_set if lottery_type != 'weilitsai' else None
-        special_num = _weighted_random_number(weights_config, z_map, is_special=True, exclude_nums=exclude_special, max_num=max_special)
-        
-        draws.append({
-            'numbers': numbers,
-            'zodiacs': [z_map.get(n, '') for n in numbers],
-            'special_num': special_num,
-            'special_zodiac': z_map.get(special_num, '')
-        })
+        # We now reuse the intelligent simulate_single to benefit from constraints & clustering
+        result = simulate_single(lottery_type, dimensions)
+        draws.append(result)
 
         
     # 统计分析
