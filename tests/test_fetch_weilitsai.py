@@ -1,5 +1,4 @@
 import pytest
-from unittest.mock import patch, MagicMock
 from data.fetch_weilitsai_data import parse_html_to_records
 
 def test_parse_html_to_records():
