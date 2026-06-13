@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+logs/
+.git/
+.env
+data/
+*.db
+.ruff_cache/

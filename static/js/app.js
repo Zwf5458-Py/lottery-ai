@@ -5,7 +5,7 @@
 
 // ==================== 全局状态 ====================
 const state = {
-    lotteryType: 'macaujc2',
+    lotteryType: 'weilitsai',
     currentTab: 'statistics',
     statisticsLoaded: false,
     historyPage: 1,
