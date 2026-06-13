@@ -483,6 +483,8 @@ def api_statistics():
         analysis = get_full_analysis(lottery_type)
         return jsonify({"success": True, "data": analysis})
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
 

@@ -13,6 +13,8 @@ def client():
 def test_api_statistics_weilitsai(client, monkeypatch):
     # Actually just call the real api_statistics with mock db or let it return empty if no data
     response = client.get('/api/statistics?type=weilitsai')
+    if response.status_code != 200:
+        print("RESPONSE ERROR:", response.get_data(as_text=True))
     assert response.status_code == 200
     data = response.get_json()
     assert data['success'] is True

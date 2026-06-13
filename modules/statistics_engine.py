@@ -5,6 +5,7 @@
 """
 
 import pandas as pd
+import numpy as np
 import math
 from collections import Counter
 from modules.data_processor import load_data, clean_data, get_db_connection
@@ -240,7 +241,6 @@ def hot_cold_numbers(top_n: int = 10, df: pd.DataFrame = None, periods: int = 10
     omission_dict = {}
     
     # 向量化计算：用 numpy 数组代替逐行 Python 循环 (O(N×49) -> O(N+49))
-    import numpy as np
     df_sorted = df.sort_values(by=['draw_date', 'draw_number'], ascending=[False, False])
     
     if lottery_type == 'weilitsai':
@@ -604,7 +604,7 @@ def zodiac_momentum_analysis(df: pd.DataFrame, z_map: dict) -> dict:
 
 
 
-def tail_number_stats(df: pd.DataFrame = None, periods: int = 100) -> dict:
+def tail_number_stats(df: pd.DataFrame = None, periods: int = 100, lottery_type: str = 'macaujc', zone: int = 1) -> dict:
     """
     尾数分布统计
     返回: {
@@ -613,33 +613,55 @@ def tail_number_stats(df: pd.DataFrame = None, periods: int = 100) -> dict:
     }
     """
     if df is None:
-        df = clean_data(load_data())
-    
+        df = clean_data(load_data(lottery_type))
+        
     # 1. 统计近期出现频率 (基于指定的 periods)
     df_recent = df.head(periods)
-    all_nums = _get_all_numbers_with_special(df_recent)
+    
+    if lottery_type == 'weilitsai':
+        if zone == 1:
+            all_nums = []
+            for col in ['n1', 'n2', 'n3', 'n4', 'n5', 'n6']:
+                if col in df_recent.columns:
+                    all_nums.extend(df_recent[col].tolist())
+            special_arr = df[['n1', 'n2', 'n3', 'n4', 'n5', 'n6']].values.astype(int) if 'n1' in df.columns else np.array([])
+        else:
+            all_nums = df_recent['special'].tolist() if 'special' in df_recent.columns else []
+            special_arr = df['special'].values.astype(int) if 'special' in df.columns else np.array([])
+    else:
+        all_nums = _get_all_numbers_with_special(df_recent)
+        special_arr = df['special_num'].values.astype(int) if 'special_num' in df.columns else np.array([])
+        
     tail_counter = Counter()
     for num in all_nums:
         tail = num % 10
         tail_counter[tail] += 1
     
-    # 2. 计算各尾数的当前遗漏值 (基于全量历史，仅看特码)
-    # 注意：为了准确性，通常看特码的遗漏。如果是看特码+正码的遗漏，则需要每期遍历7个球。
-    # 这里我们统一标准：尾数统计包含正码+特码的频率，但遗漏值仅针对“该尾数在特码位置”的遗漏。
-    # 也可以改为“任意位置出现该尾数”的遗漏。一般彩民看尾数遗漏更关注特码尾数。
-    # **决策**：为了配合图表展示特码趋势，我们这里计算【特码尾数】的遗漏值。
-    
     omission_dict = {}
     for t in range(10):
         omission_dict[t] = 0
         
-    # 向量化计算：用 numpy 数组代替逐行 Python 循环
-    import numpy as np
     df_sorted = df.sort_values(by=['draw_date', 'draw_number'], ascending=[False, False])
-    tail_arr = df_sorted['special_num'].values.astype(int) % 10
-    for t in range(10):
-        indices = np.where(tail_arr == t)[0]
-        omission_dict[t] = int(indices[0]) if len(indices) > 0 else len(tail_arr)
+    if lottery_type == 'weilitsai' and zone == 1:
+        if 'n1' in df_sorted.columns:
+            arr = df_sorted[['n1', 'n2', 'n3', 'n4', 'n5', 'n6']].values.astype(int)
+            for t in range(10):
+                if arr.size > 0:
+                    indices = np.where((arr % 10 == t).any(axis=1))[0]
+                    omission_dict[t] = int(indices[0]) if len(indices) > 0 else len(arr)
+                else:
+                    omission_dict[t] = 0
+    else:
+        if lottery_type == 'weilitsai':
+            tail_arr = df_sorted['special'].values.astype(int) % 10 if 'special' in df_sorted.columns else np.array([])
+        else:
+            tail_arr = df_sorted['special_num'].values.astype(int) % 10 if 'special_num' in df_sorted.columns else np.array([])
+        for t in range(10):
+            if tail_arr.size > 0:
+                indices = np.where(tail_arr == t)[0]
+                omission_dict[t] = int(indices[0]) if len(indices) > 0 else len(tail_arr)
+            else:
+                omission_dict[t] = 0
 
     # 结果封装
     distribution = {}
@@ -789,7 +811,6 @@ def lstm_simulation(df: pd.DataFrame, z_map: dict, periods: int = 100) -> list:
     
     try:
         from sklearn.neural_network import MLPClassifier
-        import numpy as np
         
         # DataFrame 是从新到旧的，我们需要正序进行时序训练
         df_rev = df.iloc[::-1].reset_index(drop=True)
