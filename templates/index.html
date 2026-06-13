@@ -273,6 +273,7 @@
             <div class="lottery-type-selector">
                 <button class="type-btn" data-type="macaujc">澳门六合彩</button>
                 <button class="type-btn active" data-type="macaujc2">新澳门六合彩</button>
+                <button class="type-btn" data-type="weilitsai">威力彩</button>
             </div>
             <div class="nav-tabs">
                 <button class="nav-tab active" data-tab="statistics" id="tab-stats">📊 统计分析</button>
@@ -593,7 +594,7 @@
                                     style="display: inline-block; padding: 6px 14px; font-size: 0.85rem; font-weight: 600; color: #9ca3af; border-radius: 6px; transition: all 0.3s ease;">📊
                                     号码 TOP10</span>
                             </label>
-                            <label style="cursor: pointer; margin: 0;">
+                            <label style="cursor: pointer; margin: 0;" id="hotcold-mode-color">
                                 <input type="radio" name="hotcold_mode" value="color" checked style="display: none;">
                                 <span class="toggle-btn"
                                     style="display: inline-block; padding: 6px 14px; font-size: 0.85rem; font-weight: 600; color: #9ca3af; border-radius: 6px; transition: all 0.3s ease;">🎨
@@ -639,7 +640,7 @@
                     </div>
                 </div>
 
-                <div class="chart-card glass">
+                <div class="chart-card glass" id="chart-card-zodiac">
                     <h3 class="chart-title">🐾 特码生肖路单</h3>
                     <div
                         style="display: flex; position: relative; width: 100%; margin-top: 12px; border-radius: 8px; overflow: hidden; background: rgba(0,0,0,0.1);">
@@ -660,7 +661,7 @@
                 </div>
 
                 <!-- 雷达图：马尔可夫链状态转移 (新增) -->
-                <div class="chart-card glass">
+                <div class="chart-card glass" id="chart-card-markov">
                     <div
                         style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
                         <h3 class="chart-title" style="margin-bottom: 0;">🎯 马尔可夫链(Markov Chain)状态转移概型</h3>
@@ -930,7 +931,7 @@
                                 <tr>
                                     <th>期号</th>
                                     <th>日期</th>
-                                    <th>特码</th>
+                                    <th id="history-special-col">特码</th>
                                 </tr>
                             </thead>
                             <tbody id="history-tbody">

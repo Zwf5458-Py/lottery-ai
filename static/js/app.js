@@ -134,6 +134,7 @@ Chart.defaults.font.family = "'Inter', 'Noto Sans SC', sans-serif";
 // ==================== 页面初始化 ====================
 document.addEventListener('DOMContentLoaded', () => {
     initLotteryTypeSelector();
+    updateUIForLotteryType();
     initTabs();
     initSimulator();
     loadStatistics();
@@ -288,6 +289,8 @@ function initLotteryTypeSelector() {
             // 更新状态
             state.lotteryType = btn.dataset.type;
 
+            updateUIForLotteryType();
+
             // 重置状态并重新加载当前页
             state.statisticsLoaded = false;
 
@@ -305,6 +308,41 @@ function initLotteryTypeSelector() {
         });
     });
 }
+
+function updateUIForLotteryType() {
+    const isWeilitsai = state.lotteryType === 'weilitsai';
+    
+    const specialCol = document.getElementById('history-special-col');
+    if (specialCol) {
+        specialCol.textContent = isWeilitsai ? '第二區' : '特码';
+    }
+    const zodiacCharts = [
+        'chart-card-zodiac', 
+        'chart-card-markov', 
+        'chart-card-five-elements', 
+        'chart-card-bayesian', 
+        'chart-card-lstm'
+    ];
+    
+    zodiacCharts.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = isWeilitsai ? 'none' : '';
+    });
+
+    const colorMode = document.getElementById('hotcold-mode-color');
+    if (colorMode) {
+        colorMode.style.display = isWeilitsai ? 'none' : '';
+        if (isWeilitsai) {
+            // Force select number mode if color mode was selected
+            const numberRadio = document.querySelector('input[name="hotcold_mode"][value="number"]');
+            if (numberRadio) {
+                numberRadio.checked = true;
+                numberRadio.dispatchEvent(new Event('change'));
+            }
+        }
+    }
+}
+
 
 // ==================== 选项卡切换 ====================
 function initTabs() {
@@ -2068,8 +2106,14 @@ function showLoading(show) {
 // ==================== 智能模拟面板 ====================
 
 // 根据数字获取波色CSS类名
-function getBallColorClass(num) {
+function getBallColorClass(num, zone = 1) {
     const n = parseInt(num);
+    
+    if (state.lotteryType === 'weilitsai') {
+        if (zone === 2) return 'ball-red'; // 第二區用紅色
+        return 'ball-green'; // 第一區用綠色
+    }
+
     const red = [1, 2, 7, 8, 12, 13, 18, 19, 23, 24, 29, 30, 34, 35, 40, 45, 46];
     const blue = [3, 4, 9, 10, 14, 15, 20, 25, 26, 31, 36, 37, 41, 42, 47, 48];
     const green = [5, 6, 11, 16, 17, 21, 22, 27, 28, 32, 33, 38, 39, 43, 44, 49];
@@ -2081,8 +2125,8 @@ function getBallColorClass(num) {
 }
 
 // 根据波色获取颜色十六进制值 (用于图表)
-function getBallColorHex(num) {
-    const cls = getBallColorClass(num);
+function getBallColorHex(num, zone = 1) {
+    const cls = getBallColorClass(num, zone);
     if (cls === 'ball-red') return '#ef4444';
     if (cls === 'ball-blue') return '#3b82f6';
     if (cls === 'ball-green') return '#22c55e';
@@ -2098,17 +2142,31 @@ function getSelectedDimensions() {
 // 渲染球号 HTML
 function renderBallsHtml(numbers, zodiacs, specialNum, specialZodiac, extraClass = '') {
     let html = '';
+    
+    // Add Zone 1 Label if Weilitsai
+    if (state.lotteryType === 'weilitsai') {
+        html += `<div style="display:inline-flex;flex-direction:column;align-items:center;margin-right:10px;"><span style="font-size:0.8rem;color:#888;">第一區 (Zone 1)</span></div>`;
+    }
+    
     numbers.forEach((n, i) => {
-        const colorClass = getBallColorClass(n);
+        const colorClass = getBallColorClass(n, 1);
+        const zLabel = zodiacs && zodiacs[i] ? zodiacs[i] : '';
         html += `<div style="display:inline-flex;flex-direction:column;align-items:center;">
-            <span class="ball-zodiac" style="margin-bottom: 4px; font-size: 0.8rem;">${zodiacs && zodiacs[i] ? zodiacs[i] : ''}</span>
+            <span class="ball-zodiac" style="margin-bottom: 4px; font-size: 0.8rem;${zLabel ? '' : ' height: 1.2rem;'}">${zLabel}</span>
             <div class="lottery-ball ${colorClass} ${extraClass}" style="animation-delay:${i * 0.1}s">${n}</div>
         </div>`;
     });
     html += `<div class="ball-divider" style="padding-top: 1.2rem;">+</div>`;
-    const spColorClass = getBallColorClass(specialNum);
+    
+    // Add Zone 2 Label if Weilitsai
+    if (state.lotteryType === 'weilitsai') {
+        html += `<div style="display:inline-flex;flex-direction:column;align-items:center;margin-right:10px;"><span style="font-size:0.8rem;color:#888;">第二區 (Zone 2)</span></div>`;
+    }
+    
+    const spColorClass = getBallColorClass(specialNum, 2);
+    const spZLabel = specialZodiac || '';
     html += `<div style="display:inline-flex;flex-direction:column;align-items:center;">
-        <span class="ball-zodiac" style="margin-bottom: 4px; font-size: 0.8rem; color: #facc15; font-weight: bold;">${specialZodiac || ''}</span>
+        <span class="ball-zodiac" style="margin-bottom: 4px; font-size: 0.8rem; color: #facc15; font-weight: bold;${spZLabel ? '' : ' height: 1.2rem;'}">${spZLabel}</span>
         <div class="lottery-ball ${spColorClass} ${extraClass}">${specialNum}</div>
     </div>`;
     return html;

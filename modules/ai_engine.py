@@ -815,6 +815,28 @@ def _fallback_zodiac(reason: str) -> dict:
 
 
 def _build_analysis_prompt(stats: dict, lottery_type: str, dimensions: list, pre_sel_nums: list = None, pre_sel_special: int = 1, system_weights: dict = None) -> str:
+    if lottery_type == 'weilitsai':
+        return f"""你是一位资深的彩票走势分析专家与系统推理报告撰写者。
+【系统高度机密指令】：底层的工业级统计算法已经高度结合了图表规则，**精准计算并选定了本期的号码**。
+你的唯一任务是：向用户解释底层数学模型基于图表为什么推算出了这组号码。
+【注意】：台湾威力彩(威力彩)由两个区组成：
+第一區 (Zone 1): 1-38 选 6 个号码
+第二區 (Zone 2): 1-8 选 1 个特殊号码
+请绝对不要提及传统六合彩中的动物或颜色等术语！
+
+👉 **本期底层算法最终敲定的【第一區号码】：{pre_sel_nums}**
+👉 **本期底层算法最终敲定的【第二區号码】：{pre_sel_special}**
+
+请综合各类统计维度，写出一篇详细的分析报告。
+
+请严格以如下 JSON 格式回复：
+{{
+    "numbers": {pre_sel_nums},
+    "special_num": {pre_sel_special},
+    "analysis": "你的严密推算报告...",
+    "confidence": "高"
+}}"""
+
     type_name = '新澳门六合彩' if lottery_type == 'macaujc2' else '澳门六合彩'
     dim_names = {
         'big_small': '大小走势',
