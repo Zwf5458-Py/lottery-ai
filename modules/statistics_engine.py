@@ -1021,7 +1021,7 @@ def color_hot_cold_analysis(df: pd.DataFrame, periods: int = 100) -> dict:
 def calculate_omission_thresholds(df: pd.DataFrame, lottery_type: str = 'macaujc', zone: int = 1) -> dict:
     if lottery_type == 'weilitsai':
         max_num = 38 if zone == 1 else 8
-        cols = ['n1', 'n2', 'n3', 'n4', 'n5', 'n6'] if zone == 1 else ['special']
+        cols = ['num1', 'num2', 'num3', 'num4', 'num5', 'num6'] if zone == 1 else ['special_num']
     else:
         max_num = 49
         cols = ['num1', 'num2', 'num3', 'num4', 'num5', 'num6', 'special_num'] if zone == 1 else ['special_num']

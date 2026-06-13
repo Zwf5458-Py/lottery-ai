@@ -205,9 +205,9 @@ class TestOmissionThresholds:
         df = pd.DataFrame({
             'draw_date': pd.date_range(start='1/1/2023', periods=18),
             'draw_number': range(1, 19),
-            'n1': [1] + [2]*8 + [1] + [2]*8,
-            'n2': [3]*18, 'n3': [4]*18, 'n4': [5]*18, 'n5': [6]*18, 'n6': [7]*18,
-            'special': [8]*18
+            'num1': [1] + [2]*8 + [1] + [2]*8,
+            'num2': [3]*18, 'num3': [4]*18, 'num4': [5]*18, 'num5': [6]*18, 'num6': [7]*18,
+            'special_num': [8]*18
         })
         
         thresholds = calculate_omission_thresholds(df, lottery_type='weilitsai', zone=1)
