@@ -16,7 +16,7 @@ from datetime import datetime
 from modules.data_processor import get_db_connection
 from modules.logger import get_logger
 from modules.constants import get_zodiac_mapping, get_color, RED_NUMS, BLUE_NUMS, GREEN_NUMS, ZODIAC_ORDER
-from collections import Counter
+from collections import Counter, defaultdict
 
 logger = get_logger()
 
@@ -652,6 +652,27 @@ def _weighted_random_number(weights_config: dict, z_map: dict, is_special: bool 
         weights.append(w)
         
     return _secure_random.choices(candidates, weights=weights, k=1)[0]
+
+
+def build_cooccurrence_matrix(df, max_num: int, cols: list) -> dict:
+    import numpy as np
+
+    matrix = defaultdict(lambda: defaultdict(int))
+    if df.empty or not set(cols).issubset(df.columns):
+        return matrix
+
+    arr = df[cols].values.astype(int)
+    for row in arr:
+        unique_nums = set(row)
+        for n1 in unique_nums:
+            if n1 < 1 or n1 > max_num:
+                continue
+            for n2 in unique_nums:
+                if n2 < 1 or n2 > max_num or n1 == n2:
+                    continue
+                matrix[n1][n2] += 1
+
+    return matrix
 
 
 def simulate_single(lottery_type: str = 'macaujc', dimensions: list = None) -> dict:
