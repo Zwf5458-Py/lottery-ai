@@ -591,9 +591,9 @@ def _calculate_trend_weights(lottery_type: str = 'macaujc', dimensions: list = N
     return weight_cfg
 
 
-def _weighted_random_number(weights_config: dict, z_map: dict, is_special: bool = False, exclude_nums: set = None) -> int:
-    """结合走势与生肖权重生成单个号码（1-49）"""
-    candidates = list(range(1, 50))
+def _weighted_random_number(weights_config: dict, z_map: dict, is_special: bool = False, exclude_nums: set = None, max_num: int = 49) -> int:
+    """结合走势与生肖权重生成单个号码"""
+    candidates = list(range(1, max_num + 1))
     if exclude_nums:
         candidates = [n for n in candidates if n not in exclude_nums]
         
@@ -605,7 +605,8 @@ def _weighted_random_number(weights_config: dict, z_map: dict, is_special: bool 
         # 仅对特码应用基于特码统计的维度权重
         if is_special:
             # 叠加大小权
-            if num >= 25:
+            threshold = 5 if max_num == 8 else 25
+            if num >= threshold:
                 w *= weights_config.get('big_weight', 1.0)
             else:
                 w *= weights_config.get('small_weight', 1.0)
@@ -661,21 +662,27 @@ def simulate_single(lottery_type: str = 'macaujc', dimensions: list = None) -> d
     weights_config = _calculate_trend_weights(lottery_type, dimensions)
     z_map = get_zodiac_mapping(lottery_type)
     
+    max_regular = 38 if lottery_type == 'weilitsai' else 49
+    max_special = 8 if lottery_type == 'weilitsai' else 49
+    
     numbers_set = set()
     while len(numbers_set) < 6:
         # 正码纯随机生成（确保不重复）
-        num = _weighted_random_number(weights_config, z_map, is_special=False, exclude_nums=numbers_set)
+        num = _weighted_random_number(weights_config, z_map, is_special=False, exclude_nums=numbers_set, max_num=max_regular)
         numbers_set.add(num)
         
     numbers = sorted(list(numbers_set))
+    
+    exclude_special = numbers_set if lottery_type != 'weilitsai' else None
+    
     # 特码应用全部图表与趋势权重，并排除已抽出的正码
-    special_num = _weighted_random_number(weights_config, z_map, is_special=True, exclude_nums=numbers_set)
+    special_num = _weighted_random_number(weights_config, z_map, is_special=True, exclude_nums=exclude_special, max_num=max_special)
     
     return {
         'numbers': numbers,
-        'zodiacs': [z_map[n] for n in numbers],
+        'zodiacs': [z_map.get(n, '') for n in numbers],
         'special_num': special_num,
-        'special_zodiac': z_map[special_num]
+        'special_zodiac': z_map.get(special_num, '')
     }
 
 
@@ -692,20 +699,25 @@ def simulate_batch(count: int = 10, lottery_type: str = 'macaujc', dimensions: l
     weights_config = _calculate_trend_weights(lottery_type, dimensions)
     z_map = get_zodiac_mapping(lottery_type)
     
+    max_regular = 38 if lottery_type == 'weilitsai' else 49
+    max_special = 8 if lottery_type == 'weilitsai' else 49
+    
     for _ in range(count):
         numbers_set = set()
         while len(numbers_set) < 6:
-            numbers_set.add(_weighted_random_number(weights_config, z_map, is_special=False, exclude_nums=numbers_set))
+            numbers_set.add(_weighted_random_number(weights_config, z_map, is_special=False, exclude_nums=numbers_set, max_num=max_regular))
             
         numbers = sorted(list(numbers_set))
-        special_num = _weighted_random_number(weights_config, z_map, is_special=True, exclude_nums=numbers_set)
+        exclude_special = numbers_set if lottery_type != 'weilitsai' else None
+        special_num = _weighted_random_number(weights_config, z_map, is_special=True, exclude_nums=exclude_special, max_num=max_special)
         
         draws.append({
             'numbers': numbers,
-            'zodiacs': [z_map[n] for n in numbers],
+            'zodiacs': [z_map.get(n, '') for n in numbers],
             'special_num': special_num,
-            'special_zodiac': z_map[special_num]
+            'special_zodiac': z_map.get(special_num, '')
         })
+
         
     # 统计分析
     all_numbers = []
