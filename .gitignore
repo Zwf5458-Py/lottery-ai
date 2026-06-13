@@ -73,3 +73,6 @@ coverage.xml
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Git worktrees
+.worktrees/
