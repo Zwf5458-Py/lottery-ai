@@ -714,6 +714,9 @@ def api_simulate():
 
         # AI 生肖专属推算模式
         if mode == "ai_zodiac":
+            if lottery_type == 'weilitsai':
+                return jsonify({"success": False, "error": "威力彩不支援生肖推算"}), 400
+                
             from modules.ai_engine import analyze_zodiac_with_ai
             import json
             from modules.data_processor import get_db_connection

@@ -1024,20 +1024,39 @@ def get_full_analysis(lottery_type: str = 'macaujc') -> dict:
     latest_color = "未知"
     try:
         if not df.empty:
-            latest_num = int(df.iloc[0]['special_num'])
-            latest_zodiac = z_map.get(latest_num, "未知")
-            latest_color = get_color(latest_num)
+            if lottery_type == 'weilitsai':
+                latest_num = int(df.iloc[0]['special']) if 'special' in df.columns else "??"
+            else:
+                latest_num = int(df.iloc[0]['special_num'])
+                latest_zodiac = z_map.get(latest_num, "未知")
+                latest_color = get_color(latest_num)
     except:
         pass
         
+    if lottery_type == 'weilitsai':
+        return {
+            'total_draws': len(df),
+            'number_frequency_z1': number_frequency(df, periods.get('hot_cold', 100), lottery_type, zone=1),
+            'number_frequency_z2': number_frequency(df, periods.get('hot_cold', 100), lottery_type, zone=2),
+            'hot_cold_z1': hot_cold_numbers(10, df, periods.get('hot_cold', 100), lottery_type, zone=1),
+            'hot_cold_z2': hot_cold_numbers(10, df, periods.get('hot_cold', 100), lottery_type, zone=2),
+            'odd_even_z1': odd_even_ratio(df, periods.get('odd_even', 100), lottery_type, zone=1),
+            'odd_even_z2': odd_even_ratio(df, periods.get('odd_even', 100), lottery_type, zone=2),
+            'big_small_z1': big_small_ratio(df, periods.get('big_small', 100), lottery_type, zone=1),
+            'big_small_z2': big_small_ratio(df, periods.get('big_small', 100), lottery_type, zone=2),
+            'tail_numbers_z1': tail_number_stats(df, periods.get('tail', 100), lottery_type, zone=1),
+            'tail_numbers_z2': tail_number_stats(df, periods.get('tail', 100), lottery_type, zone=2),
+            'chart_periods': periods
+        }
+        
     return {
         'total_draws': len(df),
-        'number_frequency': number_frequency(df, periods.get('hot_cold', 100)),
-        'hot_cold': hot_cold_numbers(10, df, periods.get('hot_cold', 100)),
-        'odd_even': odd_even_ratio(df, periods.get('odd_even', 100)),
-        'big_small': big_small_ratio(df, periods.get('big_small', 100)),
+        'number_frequency': number_frequency(df, periods.get('hot_cold', 100), lottery_type),
+        'hot_cold': hot_cold_numbers(10, df, periods.get('hot_cold', 100), lottery_type),
+        'odd_even': odd_even_ratio(df, periods.get('odd_even', 100), lottery_type),
+        'big_small': big_small_ratio(df, periods.get('big_small', 100), lottery_type),
         'consecutive': zodiac_momentum_analysis(df, z_map),
-        'tail_numbers': tail_number_stats(df, periods.get('tail', 100)),
+        'tail_numbers': tail_number_stats(df, periods.get('tail', 100), lottery_type),
         'special_frequency': special_number_frequency(df),
         'zodiac_stats': zodiac_frequency(df, periods.get('zodiac_trend', 200)),
         'markov': {
