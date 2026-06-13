@@ -2407,71 +2407,118 @@ async function runAISimulation() {
     document.getElementById('sim-weighted-result').style.display = 'none';
     document.getElementById('sim-single-result').style.display = 'none';
     document.getElementById('sim-zodiac-result').style.display = 'none';
+    document.getElementById('sim-batch-result').style.display = 'none';
 
     // 显示动画
     document.getElementById('sim-animation').style.display = 'block';
 
     try {
         const dims = getSelectedDimensions();
-        const res = await fetch('/api/simulate', {
+        
+        // 检查是否启用了旋转矩阵
+        const wheelingRadio = document.querySelector('input[name="sim-mode"]:checked');
+        const isWheeling = wheelingRadio && wheelingRadio.value === 'wheeling';
+        const wheelingBudget = document.getElementById('wheeling-budget') ? parseInt(document.getElementById('wheeling-budget').value, 10) : 14;
+        
+        const endpoint = isWheeling ? '/api/simulate/wheeling' : '/api/simulate';
+        const count = isWheeling ? wheelingBudget : 1;
+        
+        const res = await fetch(endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 type: state.lotteryType,
                 mode: 'ai',
                 dimensions: dims,
-                count: 1
+                count: count
             })
         });
         const json = await res.json();
 
         document.getElementById('sim-animation').style.display = 'none';
 
-        if (json.success && json.data) {
-            const data = json.data;
-            if (data.points_deducted && data.points_deducted > 0) {
-                const balanceText = data.points_balance !== null && data.points_balance !== undefined ? `，剩余 ${data.points_balance} 积分` : '';
-                showCenterToast(`本次平台AI模拟扣除 ${data.points_deducted} 积分${balanceText}`, 'warn');
-            }
+            if (isWheeling) {
+                // Wheeling System 批量结果
+                if (json.success && json.data && json.data.draws) {
+                    const data = json.data;
+                    document.getElementById('sim-batch-result').style.display = 'block';
+                    
+                    // Render summary
+                    let summaryHtml = `<div class="summary-card">`;
+                    if (data.summary.wheeling_info) {
+                        summaryHtml += `<p style="color: #fcd34d; font-weight: 500; margin-bottom: 10px;">✨ ${data.summary.wheeling_info}</p>`;
+                    }
+                    summaryHtml += `<p>共生成 ${data.summary.total_draws} 注组合</p>
+                        <p>奇偶比总计: ${data.summary.odd_even_ratio}</p>
+                        <p>大小比总计: ${data.summary.big_small_ratio}</p>
+                    </div>`;
+                    document.getElementById('batch-summary').innerHTML = summaryHtml;
+                    
+                    // Render draws
+                    let drawsHtml = '';
+                    data.draws.forEach((d, i) => {
+                        const classSpecial = state.lotteryType === 'weilitsai' ? 'weilitsai' : '';
+                        drawsHtml += `
+                            <div class="batch-draw-item">
+                                <span class="draw-idx">组合 ${i + 1}</span>
+                                <div class="draw-balls">
+                                    ${renderBallsHtml(d.numbers, d.zodiacs, d.special_num, d.special_zodiac, classSpecial)}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    document.getElementById('batch-draws-list').innerHTML = drawsHtml;
+                } else {
+                    showCenterToast('模拟失败: ' + (json.error || '未知错误'), 'error', true);
+                }
+            } else {
+                // AI 结果 (Single)
+                if (json.success && json.data) {
+                    const data = json.data;
+                    if (data.points_deducted && data.points_deducted > 0) {
+                        const balanceText = data.points_balance !== null && data.points_balance !== undefined ? `，剩余 ${data.points_balance} 积分` : '';
+                        showCenterToast(`本次平台AI模拟扣除 ${data.points_deducted} 积分${balanceText}`, 'warn');
+                    }
 
-            // AI 结果
-            if (data.ai_result && data.ai_result.success) {
-                const ai = data.ai_result;
-                const aiContainer = document.getElementById('sim-ai-result');
-                aiContainer.style.display = 'block';
+                    // AI 结果
+                    if (data.ai_result && data.ai_result.success) {
+                        const ai = data.ai_result;
+                        const aiContainer = document.getElementById('sim-ai-result');
+                        aiContainer.style.display = 'block';
 
-                document.getElementById('ai-confidence').textContent = `置信度: ${ai.confidence}`;
-                document.getElementById('ai-result-balls').innerHTML = renderBallsHtml(
-                    ai.numbers, ai.zodiacs || [], ai.special_num, ai.special_zodiac || '', 'ai-ball'
-                );
-                
-                let formattedText = formatAnalysisText(ai.analysis || '');
-                
-                document.getElementById('ai-analysis-text').innerHTML = formattedText;
-                document.getElementById('ai-analysis-text').style.lineHeight = '1.8';
-                
-            } else if (data.ai_result) {
-                // AI 调用失败，展示失败原因
-                const aiContainer = document.getElementById('sim-ai-result');
-                aiContainer.style.display = 'block';
-                document.getElementById('ai-confidence').textContent = '⚠️ AI 调用失败';
-                document.getElementById('ai-confidence').style.color = '#f87171';
-                document.getElementById('ai-result-balls').innerHTML = '';
-                document.getElementById('ai-analysis-text').innerHTML = (data.ai_result.analysis || 'AI 模型调用异常，请检查系统设置中的模型名称和 API Key 是否正确。').replace(/\n/g, '<br/>');
-            }
+                        document.getElementById('ai-confidence').textContent = `置信度: ${ai.confidence}`;
+                        document.getElementById('ai-result-balls').innerHTML = renderBallsHtml(
+                            ai.numbers, ai.zodiacs || [], ai.special_num, ai.special_zodiac || '', 'ai-ball'
+                        );
+                        
+                        let formattedText = formatAnalysisText(ai.analysis || '');
+                        
+                        document.getElementById('ai-analysis-text').innerHTML = formattedText;
+                        document.getElementById('ai-analysis-text').style.lineHeight = '1.8';
+                        
+                    } else if (data.ai_result) {
+                        // AI 调用失败，展示失败原因
+                        const aiContainer = document.getElementById('sim-ai-result');
+                        aiContainer.style.display = 'block';
+                        document.getElementById('ai-confidence').textContent = '⚠️ AI 调用失败';
+                        document.getElementById('ai-confidence').style.color = '#f87171';
+                        document.getElementById('ai-result-balls').innerHTML = '';
+                        document.getElementById('ai-analysis-text').innerHTML = (data.ai_result.analysis || 'AI 模型调用异常，请检查系统设置中的模型名称和 API Key 是否正确。').replace(/\n/g, '<br/>');
+                    }
 
-            // 传统加权对比结果
-            if (data.weighted_result) {
-                const w = data.weighted_result;
-                const wContainer = document.getElementById('sim-weighted-result');
-                wContainer.style.display = 'block';
-                document.getElementById('weighted-result-balls').innerHTML = renderBallsHtml(
-                    w.numbers, w.zodiacs, w.special_num, w.special_zodiac
-                );
+                    // 传统加权对比结果
+                    if (data.weighted_result) {
+                        const w = data.weighted_result;
+                        const wContainer = document.getElementById('sim-weighted-result');
+                        wContainer.style.display = 'block';
+                        document.getElementById('weighted-result-balls').innerHTML = renderBallsHtml(
+                            w.numbers, w.zodiacs, w.special_num, w.special_zodiac
+                        );
+                    }
+                } else {
+                    showCenterToast('模拟失败: ' + (json.error || '未知错误'), 'error', true);
+                }
             }
-        } else {
-            showCenterToast('模拟失败: ' + (json.error || '未知错误'), 'error', true);
-        }
     } catch (e) {
         document.getElementById('sim-animation').style.display = 'none';
         showCenterToast('请求失败: ' + e.message, 'error', true);
@@ -2497,6 +2544,7 @@ async function runWeightedSimulation() {
     document.getElementById('sim-weighted-result').style.display = 'none';
     document.getElementById('sim-single-result').style.display = 'none';
     document.getElementById('sim-zodiac-result').style.display = 'none';
+    document.getElementById('sim-batch-result').style.display = 'none';
 
     document.getElementById('sim-animation').style.display = 'block';
 
@@ -2550,6 +2598,21 @@ function initSimulatorPanel() {
     const zodiacBtn = document.getElementById('btn-zodiac-simulate');
     if (zodiacBtn) zodiacBtn.addEventListener('click', runZodiacSimulation);
 
+    // 旋转矩阵配置区联动
+    const wheelingRadios = document.querySelectorAll('input[name="sim-mode"]');
+    const wheelingContainer = document.getElementById('wheeling-budget-container');
+    if (wheelingRadios && wheelingContainer) {
+        wheelingRadios.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                if (e.target.value === 'wheeling') {
+                    wheelingContainer.style.display = 'flex';
+                } else {
+                    wheelingContainer.style.display = 'none';
+                }
+            });
+        });
+    }
+
     // 切到模拟 Tab 时自动检查数据新鲜度
     const simTab = document.getElementById('tab-sim');
     if (simTab) {
@@ -2589,6 +2652,7 @@ async function runZodiacSimulation() {
     document.getElementById('sim-weighted-result').style.display = 'none';
     document.getElementById('sim-single-result').style.display = 'none';
     document.getElementById('sim-zodiac-result').style.display = 'none';
+    document.getElementById('sim-batch-result').style.display = 'none';
 
     document.getElementById('sim-animation').style.display = 'block';
 

@@ -821,6 +821,29 @@
                         </div>
                     </div>
 
+                    <!-- 旋转矩阵配置区 -->
+                    <div class="sim-wheeling-config" style="margin-top: 16px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 12px; border: 1px solid rgba(255,255,255,0.08);">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                            <h4 style="margin: 0; color: #e2e8f0; font-size: 0.9rem;">🌀 生成模式</h4>
+                            <div style="display: flex; gap: 15px;">
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #cbd5e1; font-size: 0.85rem;">
+                                    <input type="radio" name="sim-mode" value="standard" checked>
+                                    标准单注生成
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #cbd5e1; font-size: 0.85rem;">
+                                    <input type="radio" name="sim-mode" value="wheeling">
+                                    旋转矩阵包牌
+                                </label>
+                            </div>
+                        </div>
+                        <div id="wheeling-budget-container" style="display: none; align-items: center; gap: 10px; margin-top: 8px;">
+                            <label for="wheeling-budget" style="color: #94a3b8; font-size: 0.85rem;">🎫 购买预算 (注数):</label>
+                            <input type="number" id="wheeling-budget" min="4" max="100" value="14" 
+                                style="width: 80px; padding: 4px 8px; border-radius: 6px; background: rgba(15,23,42,0.6); border: 1px solid rgba(148,163,184,0.3); color: white;">
+                            <span style="color: #64748b; font-size: 0.75rem;">(推荐 14 注以上)</span>
+                        </div>
+                    </div>
+
                     <!-- 模式选择 & 开始按钮 -->
                     <div class="sim-options">
                         <div class="sim-mode-buttons">
