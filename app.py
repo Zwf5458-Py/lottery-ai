@@ -809,6 +809,130 @@ def api_simulate():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route('/api/simulate/wheeling', methods=['POST'])
+@login_required
+def api_simulate_wheeling():
+    """
+    智能模拟开奖 API (旋转矩阵模式)
+    """
+    data = request.json
+    lottery_type = data.get('type', 'macaujc')
+    count = min(int(data.get('count', 14)), 1000)
+    count = max(count, 4)
+    dimensions = data.get('dimensions', [])
+
+    from data.fetch_real_data import check_data_freshness, sync_latest
+    from modules.points_manager import deduct_points, get_user_points
+    
+    freshness = check_data_freshness(lottery_type)
+    if not freshness['is_fresh']:
+        sync_latest(lottery_type)
+
+    if session.get("role") != "admin":
+        deduct_res = deduct_points(session["user_id"], count, "wheeling_system", f"type={lottery_type},count={count}")
+        if not deduct_res.get("success"):
+            return jsonify({"success": False, "error": "积分不足"})
+    
+    from modules.wheeling_system import get_best_matrix, apply_matrix
+    from modules.simulator import _calculate_trend_weights, _weighted_random_number, simulate_batch
+    from modules.constants import get_zodiac_mapping
+    
+    matrix_template, remaining = get_best_matrix(count)
+    
+    if not matrix_template:
+        # Budget too small, fallback to standard batch
+        result = simulate_batch(count, lottery_type, dimensions)
+        result['summary']['wheeling_info'] = f"预算 {count} 注过低，已回退为普通 AI 模拟 (最低要求 4 注)。"
+        return jsonify({'success': True, 'data': result, 'points': get_user_points(session['user_id'])})
+        
+    weights_config = _calculate_trend_weights(lottery_type, dimensions)
+    z_map = get_zodiac_mapping(lottery_type)
+    max_regular = 38 if lottery_type == 'weilitsai' else 49
+    max_special = 8 if lottery_type == 'weilitsai' else 49
+    
+    # Generate weights for 1 to max_regular
+    num_weights = []
+    for num in range(1, max_regular + 1):
+        w = 1.0
+        if num in weights_config.get('hot_cold_weights', {}):
+            w *= weights_config['hot_cold_weights'][num]
+        num_weights.append({'num': num, 'weight': w})
+        
+    # Sort by weight descending
+    num_weights.sort(key=lambda x: x['weight'], reverse=True)
+    
+    # Pick top N numbers for the pool
+    pool_size = matrix_template['pool_size']
+    pool = sorted([x['num'] for x in num_weights[:pool_size]])
+    
+    # Apply matrix to get combinations
+    combinations = apply_matrix(matrix_template['matrix'], pool)
+    
+    draws = []
+    for combo in combinations:
+        numbers = sorted(combo)
+        exclude_special = set(numbers) if lottery_type != 'weilitsai' else None
+        special_num = _weighted_random_number(weights_config, z_map, is_special=True, exclude_nums=exclude_special, max_num=max_special)
+        draws.append({
+            'numbers': numbers,
+            'zodiacs': [z_map.get(n, '') for n in numbers],
+            'special_num': special_num,
+            'special_zodiac': z_map.get(special_num, '')
+        })
+        
+    # Generate remaining tickets using standard AI
+    if remaining > 0:
+        standard_result = simulate_batch(remaining, lottery_type, dimensions)
+        draws.extend(standard_result['draws'])
+        
+    # Generate summary
+    from collections import Counter
+    all_numbers = []
+    special_nums = []
+    special_zodiacs = []
+    odd_count = 0
+    even_count = 0
+    big_count = 0
+    small_count = 0
+    
+    for draw in draws:
+        all_numbers.extend(draw['numbers'])
+        special_nums.append(draw['special_num'])
+        special_zodiacs.append(draw['special_zodiac'])
+        if draw['special_num'] % 2 != 0:
+            odd_count += 1
+        else:
+            even_count += 1
+        if draw['special_num'] >= 25:
+            big_count += 1
+        else:
+            small_count += 1
+            
+    number_counts = Counter(all_numbers)
+    zodiac_counts = Counter(special_zodiacs)
+    
+    summary = {
+        'total_draws': count,
+        'hot_numbers': [num for num, _ in number_counts.most_common(5)],
+        'cold_numbers': [num for num, _ in number_counts.most_common()[-5:]],
+        'odd_even_ratio': f"{odd_count}:{even_count}",
+        'big_small_ratio': f"{big_count}:{small_count}",
+        'hot_special_zodiacs': [z for z, _ in zodiac_counts.most_common(3)],
+        'wheeling_info': f"启用旋转矩阵：AI 精选 {pool_size} 码池，生成 {matrix_template['tickets']} 注 ({matrix_template['guarantee']})。剩余 {remaining} 注由标准 AI 填补。"
+    }
+    
+    result = {
+        'draws': draws,
+        'summary': summary
+    }
+
+    return jsonify({
+        'success': True,
+        'data': result,
+        'points': get_user_points(session['user_id'])
+    })
+
+
 @app.route("/api/history", methods=["GET"])
 def api_history():
     """
