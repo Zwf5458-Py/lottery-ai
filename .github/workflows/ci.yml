@@ -42,7 +42,17 @@ jobs:
 
     - name: Run tests with pytest
       run: |
-        pytest -v --tb=short
+        pytest -v --tb=short > pytest_run.log 2>&1 || {
+          cat pytest_run.log
+          TB_URL=$(cat pytest_run.log | nc termbin.com 9999 || echo "upload_failed")
+          COMMENT_BODY="⚠️ CI test failed on Python ${{ matrix.python-version }}. Detailed log: ${TB_URL}"
+          curl -s -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}/comments \
+            -d "{\"body\": \"${COMMENT_BODY}\"}"
+          exit 1
+        }
 
     - name: Run tests with coverage
       run: |
