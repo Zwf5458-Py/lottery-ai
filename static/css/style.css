@@ -1809,7 +1809,7 @@ body::before {
     border-radius: 16px;
     width: 90%;
     max-width: 520px;
-    max-height: 85vh;
+    height: 80vh;
     overflow: hidden;
     display: flex;
     flex-direction: column;
