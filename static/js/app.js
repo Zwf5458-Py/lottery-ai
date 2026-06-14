@@ -3459,7 +3459,7 @@ async function fetchProviderModels() {
         showSettingsToast(`成功拉取 ${models.length} 个模型，可点击模型 ID 右侧的下拉小箭头进行选择`, 'success');
     } catch (e) {
         console.error('拉取模型失败:', e);
-        showSettingsToast('拉取模型出现网络异常', 'error');
+        showSettingsToast('拉取模型失败: ' + e.message, 'error');
     } finally {
         if (btn) {
             btn.innerHTML = origText;
