@@ -367,19 +367,28 @@ def _call_gemini(prompt: str, api_key: str, model_name: str, stats_summary: dict
     return json.loads(response.text)
 
 
-def analyze_with_ai(stats_summary: dict, lottery_type: str = 'macaujc', dimensions: list = None) -> dict:
+def analyze_with_ai(stats_summary: dict, lottery_type: str = 'macaujc', dimensions: list = None, pool: list = None, special_num: int = None) -> dict:
     if dimensions is None:
         dimensions = ['big_small', 'odd_even', 'hot_cold', 'tail', 'zodiac']
+        
+    is_wheeling = (pool is not None and len(pool) > 6)
     
     try:
-        # 1. 先由底层数学引擎进行一次推算，获取硬性结果
-        from modules.simulator import simulate_single
-        sys_res = simulate_single(lottery_type, dimensions)
-        pre_sel_nums = sorted(sys_res.get('numbers', []))
-        pre_sel_special = sys_res.get('special_num', 1)
-        system_weights = sys_res.get('_weights', {})
+        # 1. 获取选定号码与底层权重
+        if is_wheeling:
+            pre_sel_nums = sorted(pool)
+            pre_sel_special = special_num if special_num is not None else 1
+            # 动态计算图表加权系数
+            from modules.simulator import _calculate_trend_weights
+            system_weights = _calculate_trend_weights(lottery_type, dimensions)
+        else:
+            from modules.simulator import simulate_single
+            sys_res = simulate_single(lottery_type, dimensions)
+            pre_sel_nums = sorted(sys_res.get('numbers', []))
+            pre_sel_special = sys_res.get('special_num', 1)
+            system_weights = sys_res.get('_weights', {})
         
-        prompt = _build_analysis_prompt(stats_summary, lottery_type, dimensions, pre_sel_nums, pre_sel_special, system_weights)
+        prompt = _build_analysis_prompt(stats_summary, lottery_type, dimensions, pre_sel_nums, pre_sel_special, system_weights, is_wheeling=is_wheeling)
         
         # 2. 解析主模型配置
         platform, api_key, model_name, base_url = _resolve_api_config()
@@ -451,7 +460,7 @@ def analyze_with_ai(stats_summary: dict, lottery_type: str = 'macaujc', dimensio
             
         return {
             'success': True,
-            'numbers': sorted(numbers[:6]),
+            'numbers': pre_sel_nums if is_wheeling else sorted(numbers[:6]),
             'special_num': special,
             'analysis': analysis_text,
             'confidence': result.get('confidence', '高')
@@ -1080,7 +1089,7 @@ def _fallback_zodiac(reason: str) -> dict:
     }
 
 
-def _build_analysis_prompt(stats: dict, lottery_type: str, dimensions: list, pre_sel_nums: list = None, pre_sel_special: int = 1, system_weights: dict = None) -> str:
+def _build_analysis_prompt(stats: dict, lottery_type: str, dimensions: list, pre_sel_nums: list = None, pre_sel_special: int = 1, system_weights: dict = None, is_wheeling: bool = False) -> str:
     if lottery_type == 'weilitsai':
         sections = []
         if 'big_small' in dimensions:
@@ -1326,11 +1335,16 @@ def _build_analysis_prompt(stats: dict, lottery_type: str, dimensions: list, pre
 
         report_parts = [
             "1. **宏观盘面与走势图景**：结合最近走势 and 已选维度的开奖信号概述，阐述威力彩 Zone 1 与 Zone 2 的总体盘面特征。",
-            f"2. **加权维度逐项剖析**：必须针对本次勾选的【所有 {len(dimensions)} 个独立维度（{active_dims_text}）】逐一分段进行说明。请深入研判第一區 1-38 选 6 与第二區 1-8 选 1 的数据异同，严密扣合概率与走势规律。",
+            f"2. **加权维度逐项剖析**：必须针对本次勾选的【所有 {len(dimensions)} 个独立维度（{active_dims_text}）】逐一分段进行说明。请深入研判第一區 1-38 与第二區 1-8 的数据异同，严密扣合概率与走势规律。",
         ]
         if weights_info:
             report_parts.append("3. **算法底层加权解码**：结合上述各个维度的剖析，带入底层设定的各个权重系数，解释系统是如何利用权重抑制次要矛盾、放大主要趋势的。")
-        report_parts.append(f"4. **双区多维共振与最后定胆**：论证在多重算法约束和指标下产生的合力，是如何完美指向第二區特别号码 {pre_sel_special} 与第一區号码组合 {pre_sel_nums} 这个推算解的。通过大量的概率均值回归、连庄断龙、极限遗漏反弹进行论证。")
+            
+        if is_wheeling:
+            report_parts.append(f"4. **旋转矩阵包牌共振与最后定胆**：阐述为什么本期底层数学模型筛选出的【{len(pre_sel_nums)}码精选码池】{pre_sel_nums} 在组合概率上具有巨大优势，并合理推演选择第二區特别号 {pre_sel_special} 的合理性；同时说明使用旋转矩阵（中5保4）进行包牌对冲，是如何将资金利用率和中奖概率期望最大化的。")
+        else:
+            report_parts.append(f"4. **双区多维共振与最后定胆**：论证在多重算法约束和指标下产生的合力，是如何完美指向第二區特别号码 {pre_sel_special} 与第一區号码组合 {pre_sel_nums} 这个推算解的。通过大量的概率均值回归、连庄断龙、极限遗漏反弹进行论证。")
+            
         report_structure = "\n\n".join(report_parts)
 
         active_algos = []
@@ -1342,6 +1356,13 @@ def _build_analysis_prompt(stats: dict, lottery_type: str, dimensions: list, pre
         if 'tail' in dimensions: active_algos.append('尾数分布')
         algo_desc = '、'.join(active_algos) if active_algos else '统计算法'
 
+        if is_wheeling:
+            prompt_nums_str = f"👉 **本期底层算法最终敲定的【第一區旋转矩阵 {len(pre_sel_nums)}码精选码池】：{pre_sel_nums}**"
+            target_lock_str = f"1. 目标锁定：你最后的分析结论【必须、无可争议地】指向第一區这 {len(pre_sel_nums)} 个精选码池号码 {pre_sel_nums} 和 second 區特别号 {pre_sel_special}。所有的概率推理、数学模型均须围绕这些码池号码展开，论证其作为旋转矩阵输入的概率优势与保底中奖的合理性。"
+        else:
+            prompt_nums_str = f"👉 **本期底层算法最终敲定的【第一區号码组合】：{pre_sel_nums}**"
+            target_lock_str = f"1. 目标锁定：你最后的分析结论【必须、无可争议地】指向第一區号码组合 {pre_sel_nums} 和 second 區特别号 {pre_sel_special}。所有的概率推理、数学模型推算均须收敛于此，论证其合理性与概率优势。"
+
         prompt = f"""你是一位资深的彩票走势分析专家与系统推理报告撰写者。
 
 【系统高度机密指令】：底层的工业级统计算法（含{algo_desc}等）已经高度结合了图表规则，**精准计算并选定了本期的号码**。
@@ -1352,11 +1373,11 @@ def _build_analysis_prompt(stats: dict, lottery_type: str, dimensions: list, pre
 第二區 (Zone 2): 从 1-8 中随机摇出 1 个号码 (特别号)
 请绝对不要提及任何生相动物（如鼠、牛等）、球色波段（如红、蓝、绿等颜色波段）、五行属性等其他彩票玩法的特有术语！
 
-👉 **本期底层算法最终敲定的【第一區号码组合】：{pre_sel_nums}**
+{prompt_nums_str}
 👉 **本期底层算法最终敲定的【第二區特别号】：{pre_sel_special}**
 
 ⚠️ 绝不妥协的纪律要求：
-1. 目标锁定：你最后的分析结论【必须、无可争议地】指向第一區号码组合 {pre_sel_nums} 和 second 區特别号 {pre_sel_special}。所有的概率推理、数学模型推算均须收敛于此，论证其合理性与概率优势。
+{target_lock_str}
 2. 🚫 严格维度隔离：用户本次只勾选了【{active_dims_text}】这些维度。你的分析报告中**只允许引用和讨论这些维度的数据**。绝对禁止提及、引用或编造任何未勾选维度的数据或概念。
 3. ✨ 深度关注图像反转与图表多模态综合：你必须假装你正盯着几张实时更新的【数据走势图表】。请用“从大小单双折线图、和值连涨防跌曲线、冷热遗漏分布图来看”等典型的图表视觉描述手法，把【大小】、【单双】、【尾数】和【正码和值动量】这几个图表维度的特征联合研判！提取它们在“图表轨迹”上的共振图形缩影（如双向探顶、和值极限回踩等），向用户论证均值回归规律必然爆发的原因。
 4. 杜绝对数据的数值幻觉：你在分析中引用的任何数据百分比，**必须**从下方的《已选维度统计数据》中提取！如果数据里没提，绝对不要自己编造具体数字。
@@ -1623,8 +1644,12 @@ def _build_analysis_prompt(stats: dict, lottery_type: str, dimensions: list, pre
     if weights_info:
         report_parts.append(f"3. **算法底层加权解码**：结合上述各个维度的剖析，带入底层设定的各个权重系数，解释系统是如何利用权重抑制次要矛盾、放大主要趋势的。")
     
-    report_parts.append(f"4. **多维共振与最后定胆 ({pre_sel_special}号)**：经过对【{conv_text}】的多维独立分析和权重总结归票，论证在此多重约束下产生的合力是如何完美指向 {pre_sel_special} 这个推算解的。")
-    report_parts.append(f"5. **正码矩阵建议**：简述 {pre_sel_nums} 作为本场陪衬或防爆冷的合理性。")
+    if is_wheeling:
+        report_parts.append(f"4. **多维共振与特别号定胆 ({pre_sel_special}号)**：经过对【{conv_text}】的多维独立分析和权重总结归票，论证在此多重约束下产生的合力是如何完美指向特别号 {pre_sel_special} 这个推算解的。")
+        report_parts.append(f"5. **旋转矩阵包牌建议**：简述为什么选择这 {len(pre_sel_nums)} 个精选码池号码 {pre_sel_nums} 并结合特别号 {pre_sel_special} 做旋转矩阵组合（如中5保4等）进行包牌对冲，可以使您的资金效率最大化。")
+    else:
+        report_parts.append(f"4. **多维共振与最后定胆 ({pre_sel_special}号)**：经过对【{conv_text}】的多维独立分析和权重总结归票，论证在此多重约束下产生的合力是如何完美指向 {pre_sel_special} 这个推算解的。")
+        report_parts.append(f"5. **正码矩阵建议**：简述 {pre_sel_nums} 作为本场陪衬或防爆冷的合理性。")
     report_structure = "\n\n".join(report_parts)
 
     active_algos = []
@@ -1636,6 +1661,13 @@ def _build_analysis_prompt(stats: dict, lottery_type: str, dimensions: list, pre
     if 'tail' in dimensions: active_algos.append('尾数分布')
     algo_desc = '、'.join(active_algos) if active_algos else '统计算法'
 
+    if is_wheeling:
+        prompt_nums_str = f"👉 **本期底层算法最终敲定的【旋转矩阵 {len(pre_sel_nums)}码精选码池】：{pre_sel_nums}**"
+        target_lock_str = f"1. 目标锁定：你最后的分析结论【必须、无可争议地】指向特别号 {pre_sel_special}，逻辑演绎必须闭环于此号码。精选码池正码 {pre_sel_nums} 在此作为旋转矩阵备选码池进行论证即可。"
+    else:
+        prompt_nums_str = f"👉 **本期底层算法最终敲定的【正码配置】：{pre_sel_nums}**"
+        target_lock_str = f"1. 目标锁定：你最后的分析结论【必须、无可争议地】指向特码 {pre_sel_special}，逻辑演绎必须闭环于此号码。正码 {pre_sel_nums} 在此作为陪衬提及即可。"
+
     recent_detail_block = f"{recent_detail}" if recent_detail else ""
     prompt = f"""你是一位资深的彩票走势分析专家与系统推理报告撰写者。
 
@@ -1643,12 +1675,12 @@ def _build_analysis_prompt(stats: dict, lottery_type: str, dimensions: list, pre
 你的唯一任务是：作为系统的“首席分析师”，根据下方的【历史走势数据】与【底层权重系数】，写一篇严丝合缝、极具逻辑说服力的长篇图表规则报告，向用户解释**底层数学模型基于图表为什么推算出了这组号码**，从而彻底消除你的逻辑幻觉，完美匹配图表。
 
 👉 **本期底层算法最终敲定的【特码】：{pre_sel_special}号**
-👉 **本期底层算法最终敲定的【正码配置】：{pre_sel_nums}**
+{prompt_nums_str}
 
 {zmap_text}
 
 ⚠️ 绝不妥协的纪律要求：
-1. 目标锁定：你最后的分析结论【必须、无可争议地】指向特码 {pre_sel_special}，逻辑演绎必须闭环于此号码。正码 {pre_sel_nums} 在此作为陪衬提及即可。
+{target_lock_str}
 2. 🚫 严格维度隔离：用户本次只勾选了【{active_dims_text}】这些维度。你的分析报告中**只允许引用和讨论这些维度的数据**。绝对禁止提及、引用或编造任何未勾选维度的数据或概念（如用户没勾选马尔可夫就不能提马尔可夫）。违反此条视为严重错误！
 3. ✨ 深度关注图像反转与图表多模态综合（极核心）：你必须假装你正盯着几张实时更新的【数据图表】。请用“从最新的走势图、路单连线趋势、大小单双柱状图联动来看”等典型的图表视觉描述手法，把【单双】、【大小】、【尾数】和【路单连涨防跌】这几个图表维度的几何特征联合研判！提取它们在“图表轨迹”上的共振图形缩影（如双向探顶、W底、断崖式极限回踩等），通过大量描绘“图形盘面表征”，向用户论证均值回归规律必然爆发的原因。
 4. 杜绝对数据的数值幻觉：你在分析中引用的任何数据百分比，**必须**从下方的《已选维度统计数据》中提取！如果数据里没提，绝对不要自己编造具体数字。

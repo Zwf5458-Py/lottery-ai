@@ -922,16 +922,24 @@ def api_simulate_wheeling():
     # Apply matrix to get combinations
     combinations = apply_matrix(matrix_template['matrix'], pool)
     
+    # 统一计算作为 AI 预测及分析基准的最优特别胆码
+    base_special_num = _weighted_random_number(weights_config, z_map, is_special=True, exclude_nums=None, max_num=max_special)
+    
     draws = []
     for combo in combinations:
         numbers = sorted(combo)
-        exclude_special = set(numbers) if lottery_type != 'weilitsai' else None
-        special_num = _weighted_random_number(weights_config, z_map, is_special=True, exclude_nums=exclude_special, max_num=max_special)
+        # 非台湾威力彩且基础特别号与本注正码重复时，才重新计算以避开重号；否则共享同一最优特别号胆码
+        if lottery_type != 'weilitsai' and base_special_num in numbers:
+            exclude_special = set(numbers)
+            special_num = _weighted_random_number(weights_config, z_map, is_special=True, exclude_nums=exclude_special, max_num=max_special)
+        else:
+            special_num = base_special_num
+            
         draws.append({
             'numbers': numbers,
-            'zodiacs': [z_map.get(n, '') for n in numbers],
+            'zodiacs': [z_map.get(n, '') for n in numbers] if lottery_type != 'weilitsai' else [],
             'special_num': special_num,
-            'special_zodiac': z_map.get(special_num, '')
+            'special_zodiac': z_map.get(special_num, '') if lottery_type != 'weilitsai' else ''
         })
         
     # Generate remaining tickets using standard AI
@@ -953,15 +961,16 @@ def api_simulate_wheeling():
         all_numbers.extend(draw['numbers'])
         special_nums.append(draw['special_num'])
         special_zodiacs.append(draw['special_zodiac'])
-        if draw['special_num'] % 2 != 0:
-            odd_count += 1
-        else:
-            even_count += 1
-        sp_bs = 5 if lottery_type == 'weilitsai' else 25
-        if draw['special_num'] >= sp_bs:
-            big_count += 1
-        else:
-            small_count += 1
+        bs_split = 20 if lottery_type == 'weilitsai' else 25
+        for num in draw['numbers']:
+            if num % 2 != 0:
+                odd_count += 1
+            else:
+                even_count += 1
+            if num >= bs_split:
+                big_count += 1
+            else:
+                small_count += 1
             
     number_counts = Counter(all_numbers)
     zodiac_counts = Counter(special_zodiacs)
@@ -983,7 +992,7 @@ def api_simulate_wheeling():
             from modules.ai_engine import analyze_with_ai
             import logging
             stats = get_full_analysis(lottery_type)
-            ai_result = analyze_with_ai(stats, lottery_type, dimensions)
+            ai_result = analyze_with_ai(stats, lottery_type, dimensions, pool=pool, special_num=base_special_num)
             
             # 补齐生肖映射
             if lottery_type != 'weilitsai':

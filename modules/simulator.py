@@ -1064,16 +1064,16 @@ def simulate_batch(count: int = 10, lottery_type: str = 'macaujc', dimensions: l
         special_zodiacs.append(draw['special_zodiac'])
         
         # 统计大小单双
-        if draw['special_num'] % 2 != 0:
-            odd_count += 1
-        else:
-            even_count += 1
-        
-        sp_bs = 5 if lottery_type == 'weilitsai' else 25
-        if draw['special_num'] >= sp_bs:
-            big_count += 1
-        else:
-            small_count += 1
+        bs_split = 20 if lottery_type == 'weilitsai' else 25
+        for num in draw['numbers']:
+            if num % 2 != 0:
+                odd_count += 1
+            else:
+                even_count += 1
+            if num >= bs_split:
+                big_count += 1
+            else:
+                small_count += 1
             
     number_counts = Counter(all_numbers)
     special_counts = Counter(special_nums)
