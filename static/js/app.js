@@ -3097,13 +3097,354 @@ function initSettingsPanel() {
     if (platformEl) {
         platformEl.addEventListener('change', () => {
             syncModelOptions();
-    if (!keyEl || !btn) return;
-    if (keyEl.type === 'password') {
-        keyEl.type = 'text';
-        btn.textContent = '🙈';
+        });
+    }
+
+    // --- 供应商编辑相关事件绑定 ---
+    
+    // 打开编辑当前平台
+    if (btnEditPlatform) btnEditPlatform.addEventListener('click', () => {
+        const platform = normalizePlatformName(platformEl?.value || 'google');
+        openProviderEditView(platform, false);
+    });
+
+    // 打开新建平台
+    if (btnCreatePlatform) btnCreatePlatform.addEventListener('click', () => {
+        openProviderEditView('', true);
+    });
+
+    // 返回主页面
+    if (btnBackProvider) btnBackProvider.addEventListener('click', () => {
+        showSettingsSubView('main');
+    });
+    if (btnCloseProvider) btnCloseProvider.addEventListener('click', () => {
+        closeModal();
+    });
+
+    // 保存当前供应商
+    if (btnSaveProvider) btnSaveProvider.addEventListener('click', saveCurrentProvider);
+
+    // 删除当前供应商
+    if (btnDeleteProvider) btnDeleteProvider.addEventListener('click', deleteCurrentProvider);
+
+    // 代理拉取模型列表
+    if (btnFetchModels) btnFetchModels.addEventListener('click', fetchProviderModels);
+
+    // 手动添加一行模型配置
+    if (btnAddModelRow) btnAddModelRow.addEventListener('click', () => {
+        addModelRow('', '');
+    });
+
+    // 格式切换时更新 API key 申请链接
+    if (formatEl) {
+        formatEl.addEventListener('change', () => {
+            updateGetApiKeyLink(formatEl.value);
+        });
+    }
+
+    // 密码明文切换
+    if (btnToggleProviderKey) {
+        btnToggleProviderKey.addEventListener('click', () => {
+            const keyInput = document.getElementById('edit-provider-key');
+            if (!keyInput) return;
+            if (keyInput.type === 'password') {
+                keyInput.type = 'text';
+                btnToggleProviderKey.textContent = '🙈';
+            } else {
+                keyInput.type = 'password';
+                btnToggleProviderKey.textContent = '👁';
+            }
+        });
+    }
+}
+
+// 视图显示切换
+function showSettingsSubView(view) {
+    const mainContainer = document.getElementById('settings-main-container');
+    const providerContainer = document.getElementById('provider-edit-container');
+    if (view === 'provider') {
+        if (mainContainer) mainContainer.style.display = 'none';
+        if (providerContainer) providerContainer.style.display = 'flex';
     } else {
-        keyEl.type = 'password';
-        btn.textContent = '👁';
+        if (providerContainer) providerContainer.style.display = 'none';
+        if (mainContainer) mainContainer.style.display = 'flex';
+    }
+}
+
+// 打开编辑供应商视图
+function openProviderEditView(platform, isNew) {
+    settingsIsNewProvider = isNew;
+    const titleEl = document.getElementById('provider-title');
+    const nameEl = document.getElementById('edit-provider-name');
+    const remarkEl = document.getElementById('edit-provider-remark');
+    const urlEl = document.getElementById('edit-provider-url');
+    const formatEl = document.getElementById('edit-provider-format');
+    const keyEl = document.getElementById('edit-provider-key');
+    const baseEl = document.getElementById('edit-provider-base');
+    const deleteBtn = document.getElementById('btn-delete-provider');
+    const modelsContainer = document.getElementById('provider-models-list-container');
+
+    if (keyEl) keyEl.type = 'password';
+    const toggleBtn = document.getElementById('btn-toggle-provider-key');
+    if (toggleBtn) toggleBtn.textContent = '👁';
+
+    if (isNew) {
+        if (titleEl) titleEl.textContent = '新建供应商';
+        if (nameEl) {
+            nameEl.value = '';
+            nameEl.disabled = false;
+        }
+        if (remarkEl) remarkEl.value = '';
+        if (urlEl) urlEl.value = '';
+        if (formatEl) formatEl.value = 'openai';
+        if (keyEl) keyEl.value = '';
+        if (baseEl) baseEl.value = '';
+        if (deleteBtn) deleteBtn.style.display = 'none';
+        if (modelsContainer) modelsContainer.innerHTML = '';
+        updateGetApiKeyLink('openai');
+    } else {
+        if (titleEl) titleEl.textContent = '编辑供应商';
+        
+        const prov = settingsPlatformConfigs[platform] || {
+            api_base: '', api_key: '', api_key_masked: '', remark: '', url: '', format: 'openai', models: []
+        };
+
+        if (nameEl) {
+            nameEl.value = platform;
+            nameEl.disabled = true; // 编辑时不允许改主键
+        }
+        if (remarkEl) remarkEl.value = prov.remark || '';
+        if (urlEl) urlEl.value = prov.url || '';
+        if (formatEl) formatEl.value = prov.format || 'openai';
+        if (keyEl) keyEl.value = prov.api_key || prov.api_key_masked || '';
+        if (baseEl) baseEl.value = prov.api_base || '';
+
+        // 判断是否允许删除：非内置平台才能删
+        const isBuiltin = Object.prototype.hasOwnProperty.call(DEFAULT_PLATFORM_MODELS, platform);
+        if (deleteBtn) {
+            deleteBtn.style.display = isBuiltin ? 'none' : 'inline-flex';
+        }
+
+        // 载入模型配置行
+        if (modelsContainer) {
+            modelsContainer.innerHTML = '';
+            const models = prov.models || [];
+            models.forEach(m => {
+                addModelRow(m.id, m.displayName);
+            });
+            if (models.length === 0) {
+                // 如果是空，为内置平台提供默认行
+                const defModels = DEFAULT_PLATFORM_MODELS[platform] || [];
+                defModels.forEach(mId => {
+                    addModelRow(mId, '');
+                });
+            }
+        }
+        updateGetApiKeyLink(prov.format || 'openai', platform);
+    }
+    showSettingsSubView('provider');
+}
+
+// 智能更新 API key 申请链接
+function updateGetApiKeyLink(format, platform = '') {
+    const linkEl = document.getElementById('btn-get-provider-key');
+    if (!linkEl) return;
+    
+    let url = 'https://platform.openai.com/api-keys';
+    if (format === 'google') {
+        url = 'https://aistudio.google.com/app/apikey';
+    } else {
+        const p = normalizePlatformName(platform);
+        if (p === 'nvidia') {
+            url = 'https://build.nvidia.com/';
+        } else if (p === 'openai') {
+            url = 'https://platform.openai.com/api-keys';
+        } else if (DEFAULT_PLATFORM_URLS[p]) {
+            url = DEFAULT_PLATFORM_URLS[p];
+        }
+    }
+    linkEl.href = url;
+}
+
+// 追加一行模型配置
+function addModelRow(modelId = '', displayName = '') {
+    const container = document.getElementById('provider-models-list-container');
+    if (!container) return;
+
+    const row = document.createElement('div');
+    row.className = 'provider-model-row';
+    row.innerHTML = `
+        <span style="color: #64748b; font-size: 0.8rem; user-select: none; width: 12px; text-align: center;">&gt;</span>
+        <input type="text" class="model-id-input" placeholder="模型 ID，如 gpt-4o" style="flex: 1.5; font-size: 0.8rem; padding: 6px 10px;" value="${modelId}">
+        <input type="text" class="model-display-input" placeholder="显示名称（可选）" style="flex: 1; font-size: 0.8rem; padding: 6px 10px;" value="${displayName}">
+        <button type="button" class="btn-delete-model-row" title="删除模型">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                <line x1="10" y1="11" x2="10" y2="17"></line>
+                <line x1="14" y1="11" x2="14" y2="17"></line>
+            </svg>
+        </button>
+    `;
+
+    // 绑定删除按钮
+    const delBtn = row.querySelector('.btn-delete-model-row');
+    if (delBtn) {
+        delBtn.addEventListener('click', () => {
+            row.remove();
+        });
+    }
+
+    container.appendChild(row);
+    container.scrollTop = container.scrollHeight;
+}
+
+// 代理向后端请求模型列表
+async function fetchProviderModels() {
+    const btn = document.getElementById('btn-fetch-models');
+    const origText = btn ? btn.innerHTML : '';
+    const name = normalizePlatformName(document.getElementById('edit-provider-name')?.value || '');
+    const apiBase = document.getElementById('edit-provider-base')?.value || '';
+    const apiKey = document.getElementById('edit-provider-key')?.value || '';
+    const format = document.getElementById('edit-provider-format')?.value || 'openai';
+
+    if (!apiBase) {
+        showSettingsToast('请输入 Base URL 才能拉取模型', 'warn');
+        return;
+    }
+
+    try {
+        if (btn) {
+            btn.innerHTML = '⏳ 拉取中...';
+            btn.disabled = true;
+        }
+
+        const res = await apiFetch('/api/settings/fetch_models', {
+            method: 'POST',
+            body: JSON.stringify({
+                platform_name: name,
+                api_base: apiBase,
+                api_key: apiKey,
+                format: format
+            })
+        });
+        const result = await res.json();
+        
+        if (!result.success) {
+            showSettingsToast('拉取失败: ' + (result.error || '未知错误'), 'error');
+            return;
+        }
+
+        const models = result.models || [];
+        if (models.length === 0) {
+            showSettingsToast('拉取成功，但没有找到可用模型', 'info');
+            return;
+        }
+
+        // 读取当前页面中已有的模型 ID
+        const container = document.getElementById('provider-models-list-container');
+        const existingIds = new Set();
+        if (container) {
+            container.querySelectorAll('.model-id-input').forEach(input => {
+                const val = normalizeModelName(input.value);
+                if (val) existingIds.add(val);
+            });
+        }
+
+        let addedCount = 0;
+        models.forEach(m => {
+            if (!existingIds.has(m)) {
+                addModelRow(m, '');
+                addedCount++;
+            }
+        });
+
+        showSettingsToast(`成功拉取，已自动追加 ${addedCount} 个新模型`, 'success');
+    } catch (e) {
+        console.error('拉取模型失败:', e);
+        showSettingsToast('拉取模型出现网络异常', 'error');
+    } finally {
+        if (btn) {
+            btn.innerHTML = origText;
+            btn.disabled = false;
+        }
+    }
+}
+
+// 保存当前供应商编辑状态
+function saveCurrentProvider() {
+    const nameInput = document.getElementById('edit-provider-name');
+    const name = normalizePlatformName(nameInput ? nameInput.value : '');
+    const remark = document.getElementById('edit-provider-remark')?.value || '';
+    const url = document.getElementById('edit-provider-url')?.value || '';
+    const format = document.getElementById('edit-provider-format')?.value || 'openai';
+    const key = document.getElementById('edit-provider-key')?.value || '';
+    const base = document.getElementById('edit-provider-base')?.value || '';
+
+    if (!name) {
+        showSettingsToast('供应商名称不能为空', 'warn');
+        return;
+    }
+    if (!/^[a-z0-9_-]+$/.test(name)) {
+        showSettingsToast('供应商名称只允许小写字母、数字和连字符', 'warn');
+        return;
+    }
+
+    // 提取模型列表配置
+    const modelsList = [];
+    const container = document.getElementById('provider-models-list-container');
+    if (container) {
+        container.querySelectorAll('.provider-model-row').forEach(row => {
+            const mId = normalizeModelName(row.querySelector('.model-id-input')?.value || '');
+            const mDisp = row.querySelector('.model-display-input')?.value || '';
+            if (mId) {
+                modelsList.push({ id: mId, displayName: mDisp });
+            }
+        });
+    }
+
+    // 更新或创建内存配置
+    const oldCfg = settingsPlatformConfigs[name] || {};
+    settingsPlatformConfigs[name] = {
+        api_base: base,
+        api_key: key.includes('****') ? '' : key,
+        api_key_masked: key.includes('****') ? key : (key ? '' : oldCfg.api_key_masked),
+        remark: remark,
+        url: url,
+        format: format,
+        models: modelsList
+    };
+
+    if (settingsIsNewProvider && !settingsCustomPlatforms.includes(name)) {
+        settingsCustomPlatforms.push(name);
+    }
+
+    // 回显到主视图
+    renderPlatformOptions(name);
+    syncModelOptions();
+    showSettingsSubView('main');
+    showSettingsToast('供应商配置已应用（需点击主界面保存设置物理保存）', 'success');
+}
+
+// 删除当前编辑的自定义供应商
+function deleteCurrentProvider() {
+    const name = normalizePlatformName(document.getElementById('edit-provider-name')?.value || '');
+    if (!name) return;
+
+    if (Object.prototype.hasOwnProperty.call(DEFAULT_PLATFORM_MODELS, name)) {
+        showSettingsToast('内置平台不能删除', 'warn');
+        return;
+    }
+
+    if (confirm(`确定要删除供应商平台 ${name} 及其下的所有模型配置吗？`)) {
+        settingsCustomPlatforms = settingsCustomPlatforms.filter(p => p !== name);
+        delete settingsPlatformConfigs[name];
+
+        const next = getAllPlatforms()[0] || 'google';
+        renderPlatformOptions(next);
+        syncModelOptions();
+        showSettingsSubView('main');
+        showSettingsToast(`已删除供应商 ${name}`, 'info');
     }
 }
 
@@ -3146,127 +3487,37 @@ function syncModelOptions(selectedModel = '') {
 
     const platform = normalizePlatformName(platformEl.value) || 'google';
 
-    const defaultModels = DEFAULT_PLATFORM_MODELS[platform] || [];
-    const customModels = settingsCustomPlatformModels[platform] || [];
-    const allModels = [...defaultModels, ...customModels];
+    // 优先从 settingsPlatformConfigs 读取绑定的 models 列表
+    const prov = settingsPlatformConfigs[platform] || {};
+    let allModels = [];
+    if (Array.isArray(prov.models) && prov.models.length > 0) {
+        allModels = prov.models;
+    } else {
+        const defaultModels = DEFAULT_PLATFORM_MODELS[platform] || [];
+        const customModels = settingsCustomPlatformModels[platform] || [];
+        allModels = [...defaultModels, ...customModels].map(m => ({ id: m, displayName: '' }));
+    }
 
     const uniq = [];
     const seen = new Set();
     allModels.forEach((m) => {
-        const n = normalizeModelName(m);
+        const n = normalizeModelName(m.id);
         if (!n || seen.has(n)) return;
         seen.add(n);
-        uniq.push(n);
+        uniq.push(m);
     });
 
-    modelEl.innerHTML = uniq.map((m) => `<option value="${m}">${m}</option>`).join('');
+    modelEl.innerHTML = uniq.map((m) => `<option value="${m.id}">${m.displayName || m.id}</option>`).join('');
 
     const target = normalizeModelName(selectedModel);
     if (target) {
         if (!seen.has(target)) {
             modelEl.insertAdjacentHTML('beforeend', `<option value="${target}">${target}</option>`);
-            if (!defaultModels.includes(target)) {
-                if (!settingsCustomPlatformModels[platform]) settingsCustomPlatformModels[platform] = [];
-                if (!settingsCustomPlatformModels[platform].includes(target)) {
-                    settingsCustomPlatformModels[platform].push(target);
-                    renderCustomModelList();
-                }
-            }
         }
         modelEl.value = target;
     } else if (uniq.length > 0) {
-        modelEl.value = uniq[0];
+        modelEl.value = uniq[0].id;
     }
-}
-
-function renderCustomModelList() {
-    const wrap = document.getElementById('custom-model-list');
-    const platform = normalizePlatformName(document.getElementById('set-ai-platform')?.value || 'google');
-    const models = settingsCustomPlatformModels[platform] || [];
-    if (!wrap) return;
-    if (!models.length) {
-        wrap.innerHTML = '<span style="color:#64748b; font-size:0.78rem;">当前平台暂无自定义模型</span>';
-        return;
-    }
-    wrap.innerHTML = models.map((m) => (
-        `<span class="settings-chip">${m}<button type="button" onclick="removeCustomModel('${platform.replace(/'/g, "\\'")}', '${m.replace(/'/g, "\\'")}')">×</button></span>`
-    )).join('');
-}
-
-function renderCustomPlatformList() {
-    const wrap = document.getElementById('custom-platform-list');
-    if (!wrap) return;
-    if (!settingsCustomPlatforms.length) {
-        wrap.innerHTML = '<span style="color:#64748b; font-size:0.78rem;">暂无自定义平台</span>';
-        return;
-    }
-    wrap.innerHTML = settingsCustomPlatforms.map((p) => (
-        `<span class="settings-chip">${p}<button type="button" onclick="removeCustomPlatform('${p.replace(/'/g, "\\'")}')">×</button></span>`
-    )).join('');
-}
-
-function addCustomPlatform() {
-    const input = document.getElementById('set-custom-platform');
-    const platform = normalizePlatformName(input ? input.value : '');
-    if (!platform) return;
-
-    if (Object.prototype.hasOwnProperty.call(DEFAULT_PLATFORM_MODELS, platform) || settingsCustomPlatforms.includes(platform)) {
-        showSettingsToast('该平台已存在', 'info');
-        if (input) input.value = '';
-        renderPlatformOptions(platform);
-        syncModelOptions();
-        renderCustomPlatformList();
-        return;
-    }
-
-    settingsCustomPlatforms.push(platform);
-    settingsCustomPlatformModels[platform] = settingsCustomPlatformModels[platform] || [];
-    if (input) input.value = '';
-    renderPlatformOptions(platform);
-    applyPlatformBaseUrl(platform, true);
-    renderCustomPlatformList();
-    syncModelOptions();
-    renderCustomModelList();
-    showSettingsToast('平台已添加：' + platform, 'success');
-}
-
-function addCustomModel() {
-    const platform = normalizePlatformName(document.getElementById('set-ai-platform')?.value || 'google');
-    const defaultModels = DEFAULT_PLATFORM_MODELS[platform] || [];
-    const input = document.getElementById('set-custom-model');
-    const model = normalizeModelName(input ? input.value : '');
-    if (!model) return;
-    settingsCustomPlatformModels[platform] = settingsCustomPlatformModels[platform] || [];
-    if (defaultModels.includes(model) || settingsCustomPlatformModels[platform].includes(model)) {
-        showSettingsToast('该模型已存在', 'info');
-        if (input) input.value = '';
-        syncModelOptions(model);
-        return;
-    }
-    settingsCustomPlatformModels[platform].push(model);
-    if (input) input.value = '';
-    renderCustomModelList();
-    syncModelOptions(model);
-    showSettingsToast(`模型已添加到 ${platform}：${model}`, 'success');
-}
-
-function removeCustomModel(platform, model) {
-    settingsCustomPlatformModels[platform] = (settingsCustomPlatformModels[platform] || []).filter((m) => m !== model);
-    renderCustomModelList();
-    syncModelOptions(document.getElementById('set-ai-model')?.value || '');
-}
-
-function removeCustomPlatform(platform) {
-    settingsCustomPlatforms = settingsCustomPlatforms.filter((p) => p !== platform);
-    delete settingsCustomPlatformModels[platform];
-
-    const current = normalizePlatformName(document.getElementById('set-ai-platform')?.value || 'google');
-    const next = current === platform ? getAllPlatforms()[0] || 'google' : current;
-    renderPlatformOptions(next);
-    applyPlatformBaseUrl(next, true);
-    renderCustomPlatformList();
-    syncModelOptions();
-    renderCustomModelList();
 }
 
 // 轻量提示弹层（设置保存专用）
