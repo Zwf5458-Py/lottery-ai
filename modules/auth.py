@@ -136,8 +136,25 @@ def init_auth_db():
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    
+    # 自动创建默认管理员账号 admin / 8620440Zwf
+    try:
+        cursor = conn.execute("SELECT 1 FROM users WHERE username = ?", ("admin",))
+        if not cursor.fetchone():
+            pw_hash = _hash_password("8620440Zwf")
+            import secrets
+            safe_alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+            referral_code = "".join(secrets.choice(safe_alphabet) for _ in range(8))
+            conn.execute(
+                "INSERT INTO users (username, password_hash, role, points, referral_code) VALUES (?, ?, 'admin', 999999, ?)",
+                ("admin", pw_hash, referral_code)
+            )
+    except Exception:
+        pass
+
     conn.commit()
     conn.close()
+
 
 
 # ==================== 用户独立数据库 ====================

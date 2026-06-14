@@ -120,6 +120,35 @@
             background: rgba(255, 255, 255, 0.09);
         }
 
+        .password-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+            width: 100%;
+        }
+
+        .password-wrapper input {
+            padding-right: 48px;
+        }
+
+        .toggle-password {
+            position: absolute;
+            right: 16px;
+            cursor: pointer;
+            color: #9ca3af;
+            user-select: none;
+            transition: color 0.2s;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+
+        .toggle-password:hover {
+            color: #34d399;
+        }
+
         .form-group input::placeholder {
             color: #6b7280;
         }
@@ -259,11 +288,17 @@
             </div>
             <div class="form-group">
                 <label>🔒 设置密码</label>
-                <input type="password" id="password" placeholder="至少 4 个字符" required autocomplete="new-password">
+                <div class="password-wrapper">
+                    <input type="password" id="password" placeholder="至少 4 个字符" required autocomplete="new-password">
+                    <span class="toggle-password">👁️</span>
+                </div>
             </div>
             <div class="form-group">
                 <label>🔒 确认密码</label>
-                <input type="password" id="password2" placeholder="再次输入密码" required autocomplete="new-password">
+                <div class="password-wrapper">
+                    <input type="password" id="password2" placeholder="再次输入密码" required autocomplete="new-password">
+                    <span class="toggle-password">👁️</span>
+                </div>
             </div>
             <button type="submit" class="btn-primary" id="submitBtn">🎉 注册账号</button>
         </form>
@@ -333,6 +368,20 @@
                 btn.textContent = '🎉 注册账号';
             }
         }
+
+        // 初始化密码显示/隐藏切换
+        document.querySelectorAll('.toggle-password').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const input = this.previousElementSibling;
+                if (input.type === 'password') {
+                    input.type = 'text';
+                    this.textContent = '🙈';
+                } else {
+                    input.type = 'password';
+                    this.textContent = '👁️';
+                }
+            });
+        });
     </script>
 </body>
 

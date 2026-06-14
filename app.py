@@ -317,8 +317,24 @@ from modules.auth import (
 app = Flask(__name__)
 secret_key = os.environ.get("FLASK_SECRET_KEY")
 if not secret_key:
-    secret_key = os.urandom(32).hex()
+    # 尝试从持久化文件读取，避免多 worker 随机密钥不一致导致 Session/CSRF 校验失败
+    key_file_path = os.path.join(os.path.dirname(__file__), "data", "secret_key.txt")
+    os.makedirs(os.path.dirname(key_file_path), exist_ok=True)
+    if os.path.exists(key_file_path):
+        try:
+            with open(key_file_path, "r", encoding="utf-8") as f:
+                secret_key = f.read().strip()
+        except Exception:
+            pass
+    if not secret_key:
+        secret_key = os.urandom(32).hex()
+        try:
+            with open(key_file_path, "w", encoding="utf-8") as f:
+                f.write(secret_key)
+        except Exception:
+            pass
 app.secret_key = secret_key
+
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
@@ -392,6 +408,7 @@ def page_logout():
 
 
 @app.route("/api/auth/register", methods=["POST"])
+@csrf.exempt
 def api_register():
     data = request.get_json() or {}
     result = register_user(data.get("username", ""), data.get("password", ""))
@@ -401,6 +418,7 @@ def api_register():
 
 
 @app.route("/api/auth/login", methods=["POST"])
+@csrf.exempt
 def api_login():
     data = request.get_json() or {}
     result = login_user(data.get("username", ""), data.get("password", ""))
