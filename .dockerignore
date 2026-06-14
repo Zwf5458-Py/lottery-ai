@@ -4,6 +4,7 @@ __pycache__/
 logs/
 .git/
 .env
-data/
-*.db
+data/user_dbs/
+data/cache/
+data/users.db
 .ruff_cache/
