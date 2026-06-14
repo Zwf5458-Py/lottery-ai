@@ -942,10 +942,37 @@ def api_simulate_wheeling():
             'special_zodiac': z_map.get(special_num, '') if lottery_type != 'weilitsai' else ''
         })
         
-    # Generate remaining tickets using standard AI
+    # Generate remaining tickets from the selected pool to ensure they stay within the same pool
     if remaining > 0:
-        standard_result = simulate_batch(remaining, lottery_type, dimensions)
-        draws.extend(standard_result['draws'])
+        import secrets
+        sr = secrets.SystemRandom()
+        for _ in range(remaining):
+            p_len = len(pool)
+            if p_len >= 6:
+                combo = sorted(sr.sample(pool, 6))
+            else:
+                combo = sorted(pool)
+                seen = set(combo)
+                max_reg = 38 if lottery_type == 'weilitsai' else 49
+                for j in range(1, max_reg + 1):
+                    if len(combo) >= 6: break
+                    if j not in seen:
+                        combo.append(j)
+                        seen.add(j)
+                combo = sorted(combo)
+                
+            if lottery_type != 'weilitsai' and base_special_num in combo:
+                exclude_special = set(combo)
+                special_num = _weighted_random_number(weights_config, z_map, is_special=True, exclude_nums=exclude_special, max_num=max_special)
+            else:
+                special_num = base_special_num
+                
+            draws.append({
+                'numbers': combo,
+                'zodiacs': [z_map.get(n, '') for n in combo] if lottery_type != 'weilitsai' else [],
+                'special_num': special_num,
+                'special_zodiac': z_map.get(special_num, '') if lottery_type != 'weilitsai' else ''
+            })
         
     # Generate summary
     from collections import Counter

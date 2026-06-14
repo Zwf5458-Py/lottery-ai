@@ -896,7 +896,10 @@
                             </button>
                         </div>
                     </div>
-                    <div class="ai-result-balls" id="ai-result-balls"></div>
+                    <div style="position: relative;">
+                        <div class="ai-result-balls" id="ai-result-balls" style="padding-right: 50px;"></div>
+                        <button id="btn-copy-ai-balls" class="btn-copy-balls" onclick="copyAIBalls()" title="复制号码" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); background: transparent; border: none; font-size: 1.3rem; cursor: pointer; color: var(--text-secondary); transition: opacity 0.2s; opacity: 0.6; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">📋</button>
+                    </div>
                     <div class="ai-analysis-text" id="ai-analysis-text"></div>
                 </div>
 
@@ -925,7 +928,12 @@
                     <h3>📊 批量模拟结果</h3>
                     <div class="batch-summary" id="batch-summary"></div>
                     <div class="batch-draws-container">
-                        <h4>最近 20 期结果</h4>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <h4 style="margin: 0; font-size: 0.95rem; color: var(--text-secondary);">最近 20 期结果</h4>
+                            <button id="btn-copy-batch-draws" class="btn-copy-balls" onclick="copyBatchDraws()" title="复制全部组合" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 5px 10px; border-radius: var(--radius-xs); font-size: 0.75rem; cursor: pointer; color: var(--text-secondary); display: flex; align-items: center; gap: 4px; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">
+                                📋 复制全部组合
+                            </button>
+                        </div>
                         <div class="batch-draws-list" id="batch-draws-list"></div>
                     </div>
                 </div>
@@ -984,7 +992,7 @@
         <p>⚠️ 彩票开奖为独立随机事件，数据分析不构成任何投注建议</p>
     </footer>
 
-    <script src="{{ url_for('static', filename='js/app.js') }}?v=105"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=106"></script>
 
     <!-- 设置弹窗 Modal -->
     <div id="settings-modal" class="settings-modal" style="display:none;">

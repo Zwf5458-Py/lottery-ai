@@ -3778,6 +3778,91 @@ function syncBackupModelOptions(index, selectedModel = '') {
     }
 }
 
+// 复制 AI 预测球号
+function copyAIBalls() {
+    const ballsContainer = document.getElementById('ai-result-balls');
+    if (!ballsContainer) return;
+    const ballDivs = ballsContainer.querySelectorAll('.lottery-ball');
+    if (ballDivs.length === 0) return;
+    
+    const nums = [];
+    ballDivs.forEach(div => {
+        nums.push(div.textContent.trim());
+    });
+    
+    let text = '';
+    if (nums.length > 1) {
+        const regular = nums.slice(0, -1).join(', ');
+        const special = nums[nums.length - 1];
+        text = `${regular} + ${special}`;
+    } else {
+        text = nums[0];
+    }
+    
+    copyTextToClipboard(text, '已成功复制开奖号：' + text);
+}
+
+// 复制批量模拟结果中的全部组合
+function copyBatchDraws() {
+    const list = document.getElementById('batch-draws-list');
+    if (!list) return;
+    const items = list.querySelectorAll('.batch-draw-item');
+    if (items.length === 0) return;
+    
+    let textLines = [];
+    items.forEach(item => {
+        const idxText = item.querySelector('.batch-draw-index') ? item.querySelector('.batch-draw-index').textContent.trim() : '';
+        const ballDivs = item.querySelectorAll('.lottery-ball');
+        if (ballDivs.length > 0) {
+            const nums = [];
+            ballDivs.forEach(div => {
+                nums.push(div.textContent.trim());
+            });
+            let line = '';
+            if (nums.length > 1) {
+                const regular = nums.slice(0, -1).join(', ');
+                const special = nums[nums.length - 1];
+                line = `${regular} + ${special}`;
+            } else {
+                line = nums[0];
+            }
+            textLines.push(idxText ? `${idxText}: ${line}` : line);
+        }
+    });
+    
+    const text = textLines.join('\n');
+    copyTextToClipboard(text, '已成功复制全部组合！');
+}
+
+// 通用复制板辅助函数 (现代浏览器 + Fallback 支持)
+function copyTextToClipboard(text, successMsg) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+            showCenterToast(successMsg, 'success');
+        }).catch(() => {
+            fallbackCopyText(text, successMsg);
+        });
+    } else {
+        fallbackCopyText(text, successMsg);
+    }
+}
+
+function fallbackCopyText(text, successMsg) {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+        document.execCommand('copy');
+        showCenterToast(successMsg, 'success');
+    } catch (err) {
+        showCenterToast('复制失败: ' + err, 'error');
+    }
+    document.body.removeChild(textArea);
+}
+
 // 轻量提示弹层（设置保存专用）
 let centerToastWrapper = null;
 let centerToastEl = null;
