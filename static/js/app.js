@@ -3383,6 +3383,11 @@ async function loadSettings() {
             titleEl.textContent = state.lotteryType === 'weilitsai' ? '⚙️ 系统设置 (威力彩)' : '⚙️ 系统设置 (新澳门六合彩)';
         }
 
+        const zodiacLabel = document.getElementById('set-zodiac-trend')?.previousElementSibling;
+        if (zodiacLabel) {
+            zodiacLabel.textContent = state.lotteryType === 'weilitsai' ? '和值动量' : '生肖路单';
+        }
+
         const res = await apiFetch('/api/settings?type=' + state.lotteryType);
         const result = await res.json();
         if (!result.success) return;
