@@ -7,6 +7,7 @@
 
 import json
 import os
+import copy
 import sqlite3
 from modules.crypto_utils import (
     encrypt_api_key,
@@ -87,7 +88,7 @@ def load_config(user_id=None) -> dict:
             return _deep_merge(DEFAULT_CONFIG, cfg)
     except Exception:
         pass
-    return DEFAULT_CONFIG.copy()
+    return copy.deepcopy(DEFAULT_CONFIG)
 
 
 def save_config(data: dict, user_id=None) -> bool:
@@ -252,9 +253,9 @@ def _load_user_config(user_id: int) -> dict:
         conn.close()
 
         if not rows:
-            return DEFAULT_CONFIG.copy()
+            return copy.deepcopy(DEFAULT_CONFIG)
 
-        config = DEFAULT_CONFIG.copy()
+        config = copy.deepcopy(DEFAULT_CONFIG)
         for r in rows:
             try:
                 loaded = json.loads(r[1])
@@ -266,7 +267,7 @@ def _load_user_config(user_id: int) -> dict:
                 config[r[0]] = r[1]
         return config
     except Exception:
-        return DEFAULT_CONFIG.copy()
+        return copy.deepcopy(DEFAULT_CONFIG)
 
 
 def _save_user_config(data: dict, user_id: int) -> bool:
@@ -314,7 +315,7 @@ def _save_user_config(data: dict, user_id: int) -> bool:
 
 def _deep_merge(base: dict, override: dict) -> dict:
     """深度合并字典，override 覆盖 base"""
-    result = base.copy()
+    result = copy.deepcopy(base)
     for key, value in override.items():
         if key in result and isinstance(result[key], dict) and isinstance(value, dict):
             result[key] = _deep_merge(result[key], value)

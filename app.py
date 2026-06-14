@@ -1049,6 +1049,8 @@ def api_get_settings():
 
         lottery_type = request.args.get("type", "macaujc")
         config = load_config(session["user_id"])
+        from modules.config_manager import get_ai_config
+        config["ai"] = get_ai_config(session["user_id"])
         
         # 根据请求类型返回该彩种专属的统计期数配置，向下兼容旧平铺结构
         config["chart_periods"] = get_chart_periods(session["user_id"], lottery_type)
