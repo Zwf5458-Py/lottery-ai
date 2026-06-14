@@ -25,11 +25,23 @@ def _resolve_api_config():
     ai_cfg = _get_ai_config()
     platform = ai_cfg.get('platform', 'local').lower()
     model_name = ai_cfg.get('model', 'gpt-5.4')
-    api_key = ai_cfg.get('api_key', '')
+    
+    # 优先从该平台专有的 provider 配置中读取 key 和 base_url
+    providers = ai_cfg.get('providers', {})
+    provider_cfg = providers.get(platform, {}) if isinstance(providers, dict) else {}
+    
+    api_key = provider_cfg.get('api_key') if isinstance(provider_cfg, dict) else None
+    base_url = provider_cfg.get('api_base') if isinstance(provider_cfg, dict) else None
+    
+    # 如果没读到，则降级使用旧的全局字段 (向前兼容)
+    if not api_key:
+        api_key = ai_cfg.get('api_key', '')
+    if not base_url:
+        base_url = ai_cfg.get('base_url') or ai_cfg.get('api_base', 'http://127.0.0.1:8317/v1')
     
     # 如果平台是 local 或 openai 兼容，优先从环境变量读取本地配置
     if platform in ('local', 'openai', 'deepseek', 'qwen', 'glm', 'minimax', 'nvidia', 'cpamc'):
-        base_url = os.environ.get('LOCAL_AI_BASE') or os.environ.get('HOST_GATEWAY_URL') or ai_cfg.get('base_url', 'http://127.0.0.1:8317/v1')
+        base_url = os.environ.get('LOCAL_AI_BASE') or os.environ.get('HOST_GATEWAY_URL') or base_url
         if not api_key:
             api_key = os.environ.get('LOCAL_AI_API_KEY', '')
         # 最后保险：如果环境变量仍为空，手动从 .env 文件读取

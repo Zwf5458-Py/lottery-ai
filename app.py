@@ -1058,6 +1058,19 @@ def api_get_settings():
             config["ai"]["api_key_masked"] = api_key[:4] + "****" + api_key[-4:]
         else:
             config["ai"]["api_key_masked"] = api_key
+            
+        # 对每个独立的平台（provider）密钥同样生成遮罩
+        providers = config.get("ai", {}).get("providers", {})
+        if isinstance(providers, dict):
+            for p_name, p_cfg in providers.items():
+                if isinstance(p_cfg, dict) and p_cfg.get("api_key"):
+                    pk = p_cfg["api_key"]
+                    if len(pk) > 8:
+                        p_cfg["api_key_masked"] = pk[:4] + "****" + pk[-4:]
+                    else:
+                        p_cfg["api_key_masked"] = pk
+                    p_cfg["api_key"] = ""  # 清空明文，防止回传泄露
+                    
         return jsonify({"success": True, "data": config})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -1159,6 +1172,74 @@ def api_save_settings():
             return jsonify({"success": False, "error": "保存失败"}), 500
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/settings/fetch_models", methods=["POST"])
+@login_required
+def api_fetch_models():
+    """代理向外部 AI 地址拉取模型列表，避开跨域并保护密钥"""
+    try:
+        from modules.config_manager import get_ai_config
+        import requests
+
+        data = request.get_json() or {}
+        api_base = data.get("api_base", "").strip()
+        api_key = data.get("api_key", "").strip()
+        platform_name = data.get("platform_name", "").strip()
+        api_format = data.get("format", "openai").strip()
+
+        # 处理掩码还原
+        if api_key and "****" in api_key:
+            ai_cfg = get_ai_config(session["user_id"])
+            providers = ai_cfg.get("providers", {})
+            p_cfg = providers.get(platform_name, {}) if isinstance(providers, dict) else {}
+            api_key = p_cfg.get("api_key", "") if isinstance(p_cfg, dict) else ""
+
+        if not api_base:
+            return jsonify({"success": False, "error": "请输入 Base URL"}), 400
+
+        headers = {}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        # 适配不同接口格式
+        if api_format == "google":
+            url = f"{api_base.rstrip('/')}/v1beta/models"
+            if api_key:
+                url += f"?key={api_key}"
+            response = requests.get(url, timeout=10)
+            if response.status_code != 200:
+                return jsonify({
+                    "success": False,
+                    "error": f"接口返回错误 ({response.status_code}): {response.text[:200]}"
+                }), response.status_code
+            res_data = response.json()
+            models_list = []
+            for m in res_data.get("models", []):
+                name = m.get("name", "")
+                if name.startswith("models/"):
+                    name = name[7:]
+                models_list.append(name)
+        else:
+            # OpenAI / compatible 格式
+            url = f"{api_base.rstrip('/')}/models"
+            response = requests.get(url, headers=headers, timeout=10)
+            if response.status_code != 200:
+                return jsonify({
+                    "success": False,
+                    "error": f"接口返回错误 ({response.status_code}): {response.text[:200]}"
+                }), response.status_code
+            res_data = response.json()
+            models_list = [m.get("id") for m in res_data.get("data", []) if m.get("id")]
+
+        models_list = sorted(list(set(models_list)))
+        return jsonify({"success": True, "models": models_list})
+    except requests.exceptions.Timeout:
+        return jsonify({"success": False, "error": "请求超时，请检查 Base URL 是否可正常访问"}), 504
+    except requests.exceptions.RequestException as re:
+        return jsonify({"success": False, "error": f"网络请求失败: {str(re)}"}), 502
+    except Exception as e:
+        return jsonify({"success": False, "error": f"发生错误: {str(e)}"}), 500
 
 
 # ==================== 账号管理 API ====================

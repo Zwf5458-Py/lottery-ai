@@ -3018,44 +3018,42 @@ function renderZodiacPredictions(predictions) {
 // ==================== 设置面板 ====================
 
 const DEFAULT_PLATFORM_MODELS = {
-    local: ['gpt-5.4', 'z-ai/glm4.7', 'gpt-5.2'],
-    nvidia: [
-        'z-ai/glm4.7',
-        'z-ai/glm5',
-        'meta/llama-4-scout-17b-16e-instruct',
-        'minimaxai/minimax-m2.5',
-        'microsoft/phi-4-mini-flash-reasoning',
-        'qwen/qwen3.5-122b-a10b'
-    ],
-    google: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-3.1-pro-preview', 'gemini-3-pro-preview', 'gemini-3-flash-preview'],
-    openai: ['gpt-4o', 'gpt-4o-mini', 'o4-mini'],
-    deepseek: ['deepseek-chat', 'deepseek-reasoner'],
-    qwen: ['qwen-max', 'qwen-plus', 'qwen-turbo'],
-    glm: ['glm-4-plus', 'glm-4-air', 'glm-4-flash'],
-    minimax: ['minimax-text-01', 'minimax-chat', 'abab6.5-chat'],
+    google: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'],
+    openai: ['gpt-4o', 'gpt-4o-mini', 'o1-mini', 'o3-mini'],
+    nvidia: ['nvidia/llama-3.3-nemotron-super-49b-v1.5', 'nvidia/llama-3.1-nemotron-70b-instruct'],
+    local: ['gpt-5.4', 'gpt-5.4-mini']
 };
-const DEFAULT_PLATFORM_LABELS = {
-    local: '本地模型(OpenAI兼容)',
-    nvidia: 'NVIDIA NIM',
-    google: 'Google Gemini',
-    openai: 'OpenAI',
-    deepseek: 'DeepSeek',
-    qwen: '通义千问',
-    glm: '智谱AI (GLM)',
-    minimax: 'MiniMax',
-};
+
 const DEFAULT_PLATFORM_BASE_URLS = {
-    local: 'http://127.0.0.1:8317/v1',
-    nvidia: 'https://integrate.api.nvidia.com/v1',
     google: 'https://generativelanguage.googleapis.com',
     openai: 'https://api.openai.com/v1',
-    deepseek: 'https://api.deepseek.com/v1',
-    qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    glm: 'https://open.bigmodel.cn/api/paas/v4',
-    minimax: 'https://api.minimax.chat/v1',
+    nvidia: 'https://integrate.api.nvidia.com/v1',
+    local: 'http://127.0.0.1:8317/v1',
 };
+const DEFAULT_PLATFORM_LABELS = {
+    google: 'Google Gemini',
+    openai: 'OpenAI Compatible',
+    nvidia: 'NVIDIA NIM',
+    local: 'Local AI (127.0.0.1)'
+};
+const DEFAULT_PLATFORM_FORMATS = {
+    google: 'google',
+    openai: 'openai',
+    nvidia: 'openai',
+    local: 'openai'
+};
+const DEFAULT_PLATFORM_URLS = {
+    google: 'https://aistudio.google.com/app/apikey',
+    openai: 'https://platform.openai.com/api-keys',
+    nvidia: 'https://build.nvidia.com',
+    local: 'https://github.com/Zwf5458-Py/lottery-ai'
+};
+
 let settingsCustomPlatforms = [];
-let settingsCustomPlatformModels = {};
+let settingsCustomPlatformModels = {}; // 仅作兼容保留
+let settingsPlatformConfigs = {};
+let settingsLastActivePlatform = '';
+let settingsIsNewProvider = false; // 用来标记是新建还是编辑
 
 function initSettingsPanel() {
     const modal = document.getElementById('settings-modal');
@@ -3064,17 +3062,26 @@ function initSettingsPanel() {
     const overlay = document.getElementById('settings-overlay');
     const btnSave = document.getElementById('btn-save-settings');
     const platformEl = document.getElementById('set-ai-platform');
-    const btnAddPlatform = document.getElementById('btn-add-platform');
-    const customPlatformInput = document.getElementById('set-custom-platform');
-    const btnAddModel = document.getElementById('btn-add-model');
-    const customModelInput = document.getElementById('set-custom-model');
-    const btnToggleAiKey = document.getElementById('btn-toggle-ai-key');
+
+    // 供应商编辑面板相关按钮
+    const btnEditPlatform = document.getElementById('btn-edit-platform-ui');
+    const btnCreatePlatform = document.getElementById('btn-create-platform-ui');
+    const btnBackProvider = document.getElementById('btn-back-provider');
+    const btnCloseProvider = document.getElementById('btn-close-provider');
+    const btnSaveProvider = document.getElementById('btn-save-provider');
+    const btnDeleteProvider = document.getElementById('btn-delete-provider');
+    const btnFetchModels = document.getElementById('btn-fetch-models');
+    const btnAddModelRow = document.getElementById('btn-add-model-row');
+    const formatEl = document.getElementById('edit-provider-format');
+    const btnToggleProviderKey = document.getElementById('btn-toggle-provider-key');
 
     if (!modal) return;
 
     // 打开设置
     if (btnOpen) btnOpen.addEventListener('click', () => {
         modal.style.display = 'flex';
+        // 确保回到主设置页面视图
+        showSettingsSubView('main');
         loadSettings();
     });
 
@@ -3086,58 +3093,10 @@ function initSettingsPanel() {
     // 保存设置
     if (btnSave) btnSave.addEventListener('click', saveSettings);
 
-    // 平台切换时联动模型下拉与列表
+    // 平台切换时联动模型下拉
     if (platformEl) {
         platformEl.addEventListener('change', () => {
-            applyPlatformBaseUrl(platformEl.value, true);
             syncModelOptions();
-            renderCustomModelList();
-        });
-    }
-
-    if (btnAddPlatform) btnAddPlatform.addEventListener('click', addCustomPlatform);
-    if (customPlatformInput) {
-        customPlatformInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                addCustomPlatform();
-            }
-        });
-    }
-
-    // 添加自定义模型
-    if (btnAddModel) btnAddModel.addEventListener('click', addCustomModel);
-    if (customModelInput) {
-        customModelInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                addCustomModel();
-            }
-        });
-    }
-
-    if (btnToggleAiKey) {
-        btnToggleAiKey.addEventListener('click', toggleAiKeyVisibility);
-    }
-}
-
-function getDefaultBaseUrl(platform) {
-    return DEFAULT_PLATFORM_BASE_URLS[normalizePlatformName(platform)] || '';
-}
-
-function applyPlatformBaseUrl(platform, force = false) {
-    const baseEl = document.getElementById('set-ai-base');
-    if (!baseEl) return;
-    const defaultUrl = getDefaultBaseUrl(platform);
-    if (force || !String(baseEl.value || '').trim()) {
-        baseEl.value = defaultUrl;
-    }
-    baseEl.placeholder = defaultUrl || '可选，如 https://api.openai.com/v1';
-}
-
-function toggleAiKeyVisibility() {
-    const keyEl = document.getElementById('set-ai-key');
-    const btn = document.getElementById('btn-toggle-ai-key');
     if (!keyEl || !btn) return;
     if (keyEl.type === 'password') {
         keyEl.type = 'text';
@@ -3408,7 +3367,7 @@ async function loadSettings() {
             )
             : {};
 
-        // 兼容旧字段 custom_models：将其归入当前平台
+        // 兼容旧字段 custom_models
         if (Array.isArray(ai.custom_models) && ai.custom_models.length > 0) {
             const legacyPlatform = normalizePlatformName(ai.platform || 'google');
             settingsCustomPlatformModels[legacyPlatform] = settingsCustomPlatformModels[legacyPlatform] || [];
@@ -3419,25 +3378,55 @@ async function loadSettings() {
             });
         }
 
-        // AI 配置
+        // 初始化每个平台的独立配置并支持旧配置平滑合并
+        settingsPlatformConfigs = {};
+        const providers = ai.providers || {};
+        const allPlatforms = getAllPlatforms();
+        
+        allPlatforms.forEach(p => {
+            const p_name = normalizePlatformName(p);
+            const prov = providers[p_name] || {};
+            
+            let modelsList = [];
+            if (Array.isArray(prov.models)) {
+                modelsList = prov.models.map(m => typeof m === 'string' ? { id: m, displayName: '' } : { id: m.id || '', displayName: m.displayName || '' });
+            } else {
+                // 旧配置兼容合并
+                const defModels = DEFAULT_PLATFORM_MODELS[p_name] || [];
+                const custModels = settingsCustomPlatformModels[p_name] || [];
+                const combined = [...defModels, ...custModels];
+                const seen = new Set();
+                combined.forEach(m => {
+                    if (!m || seen.has(m)) return;
+                    seen.add(m);
+                    modelsList.push({ id: m, displayName: '' });
+                });
+            }
+
+            settingsPlatformConfigs[p_name] = {
+                api_base: prov.api_base || '',
+                api_key: '',
+                api_key_masked: prov.api_key_masked || '',
+                remark: prov.remark || '',
+                url: prov.url || DEFAULT_PLATFORM_URLS[p_name] || '',
+                format: prov.format || DEFAULT_PLATFORM_FORMATS[p_name] || 'openai',
+                models: modelsList
+            };
+        });
+
+        // 兼容向下迁移旧有全局配置
+        const currentPlatform = normalizePlatformName(ai.platform || 'google');
+        if (settingsPlatformConfigs[currentPlatform]) {
+            if (!settingsPlatformConfigs[currentPlatform].api_base && ai.api_base) {
+                settingsPlatformConfigs[currentPlatform].api_base = ai.api_base;
+            }
+            if (!settingsPlatformConfigs[currentPlatform].api_key_masked && ai.api_key_masked) {
+                settingsPlatformConfigs[currentPlatform].api_key_masked = ai.api_key_masked;
+            }
+        }
+
         renderPlatformOptions(ai.platform || 'google');
-        renderCustomPlatformList();
         syncModelOptions(ai.model || '');
-        renderCustomModelList();
-
-        const baseEl = document.getElementById('set-ai-base');
-        if (baseEl) {
-            baseEl.value = ai.api_base || getDefaultBaseUrl(ai.platform || 'google');
-        }
-        applyPlatformBaseUrl(ai.platform || 'google', false);
-
-        const keyEl = document.getElementById('set-ai-key');
-        if (keyEl) keyEl.value = ''; // 不回显明文
-
-        const keyHint = document.getElementById('set-ai-key-hint');
-        if (keyHint && ai.api_key_masked) {
-            keyHint.textContent = '当前: ' + ai.api_key_masked;
-        }
 
         // 期数配置
         const fieldMap = {
@@ -3476,12 +3465,44 @@ async function saveSettings() {
     try {
         if (btn) { btn.textContent = '⏳ 保存中...'; btn.disabled = true; }
 
+        // 整理各个平台独立的 providers 数据发给后端，并同步兼容 custom_platform_models
+        const payloadProviders = {};
+        const customPlatformModelsSync = {};
+        
+        for (const [p, cfg] of Object.entries(settingsPlatformConfigs)) {
+            payloadProviders[p] = {
+                api_base: cfg.api_base,
+                remark: cfg.remark,
+                url: cfg.url,
+                format: cfg.format,
+                models: cfg.models
+            };
+            if (cfg.api_key) {
+                payloadProviders[p].api_key = cfg.api_key;
+            } else if (cfg.api_key_masked) {
+                payloadProviders[p].api_key = cfg.api_key_masked;
+            } else {
+                payloadProviders[p].api_key = '';
+            }
+
+            // 同步 custom_platform_models：过滤出非内置的模型
+            const defModels = DEFAULT_PLATFORM_MODELS[p] || [];
+            const customList = (cfg.models || [])
+                .map(m => m.id)
+                .filter(id => !defModels.includes(id));
+            customPlatformModelsSync[p] = customList;
+        }
+
+        const activePlatform = normalizePlatformName(document.getElementById('set-ai-platform')?.value || 'google');
+        const activeModel = normalizeModelName(document.getElementById('set-ai-model')?.value || '');
+
         const payload = {
             ai: {
-                platform: document.getElementById('set-ai-platform')?.value || 'google',
-                model: document.getElementById('set-ai-model')?.value || 'gemini-2.5-pro',
+                platform: activePlatform,
+                model: activeModel,
                 custom_platforms: settingsCustomPlatforms.slice(),
-                custom_platform_models: JSON.parse(JSON.stringify(settingsCustomPlatformModels)),
+                custom_platform_models: customPlatformModelsSync,
+                providers: payloadProviders,
             },
             chart_periods: {
                 zodiac_trend: parseInt(document.getElementById('set-zodiac-trend')?.value) || 200,
@@ -3496,14 +3517,17 @@ async function saveSettings() {
             }
         };
 
-        // API Key 只在用户输入了新值时才发送
-        const keyVal = document.getElementById('set-ai-key')?.value;
-        if (keyVal && keyVal.trim().length > 0) {
-            payload.ai.api_key = keyVal.trim();
-        }
-        const baseVal = document.getElementById('set-ai-base')?.value;
-        if (baseVal && baseVal.trim().length > 0) {
-            payload.ai.api_base = baseVal.trim();
+        // 兼容保留全局的 api_base / api_key 字段，避免报错
+        const currentActiveCfg = settingsPlatformConfigs[activePlatform];
+        if (currentActiveCfg) {
+            if (currentActiveCfg.api_base) {
+                payload.ai.api_base = currentActiveCfg.api_base;
+            }
+            if (currentActiveCfg.api_key) {
+                payload.ai.api_key = currentActiveCfg.api_key;
+            } else if (currentActiveCfg.api_key_masked) {
+                payload.ai.api_key = currentActiveCfg.api_key_masked;
+            }
         }
 
         const res = await apiFetch('/api/settings?type=' + state.lotteryType, {
@@ -3532,7 +3556,6 @@ async function saveSettings() {
             setTimeout(() => {
                 document.getElementById('settings-modal').style.display = 'none';
                 if (btn) { btn.textContent = origText; btn.disabled = false; }
-                // 重新加载统计图表以应用新期数
                 state.statisticsLoaded = false;
                 loadStatistics();
             }, 800);
@@ -3541,7 +3564,8 @@ async function saveSettings() {
             if (btn) { btn.textContent = origText; btn.disabled = false; }
         }
     } catch (e) {
-        showSettingsToast('网络错误: ' + e.message, 'error', true);
+        console.error('保存设置失败:', e);
+        showSettingsToast('保存设置出错: ' + e.message, 'error', true);
         if (btn) { btn.textContent = origText; btn.disabled = false; }
     }
 }

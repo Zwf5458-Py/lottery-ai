@@ -990,70 +990,36 @@
     <div id="settings-modal" class="settings-modal" style="display:none;">
         <div class="settings-overlay" id="settings-overlay"></div>
         <div class="settings-panel">
-            <div class="settings-header">
-                <h2>⚙️ 系统设置</h2>
-                <div class="settings-actions">
-                    <button class="btn-save-settings" id="btn-save-settings">💾 保存设置</button>
-                    <button class="settings-close" id="btn-close-settings">&times;</button>
+            
+            <!-- 主设置页面容器 -->
+            <div id="settings-main-container" style="display: flex; flex-direction: column; height: 100%;">
+                <div class="settings-header">
+                    <h2>⚙️ 系统设置</h2>
+                    <div class="settings-actions">
+                        <button class="btn-save-settings" id="btn-save-settings">💾 保存设置</button>
+                        <button class="settings-close" id="btn-close-settings">&times;</button>
+                    </div>
                 </div>
-            </div>
-            <div class="settings-body">
-                <div class="settings-section">
-                    <h3>🤖 AI 模型配置</h3>
-                    <div class="settings-row">
-                        <label>模型平台</label>
-                        <div class="settings-inline-actions">
-                            <select id="set-ai-platform"></select>
+                <div class="settings-body">
+                    <div class="settings-section">
+                        <h3>🤖 AI 模型配置</h3>
+                        <div class="settings-row">
+                            <label>模型平台</label>
+                            <div class="settings-inline-actions">
+                                <select id="set-ai-platform" style="flex:1;"></select>
+                                <button type="button" id="btn-edit-platform-ui" class="settings-mini-btn" style="padding: 0 10px; background: rgba(212, 168, 67, 0.15); border-color: rgba(212, 168, 67, 0.35); color: #fef08a; margin-left: 4px;">✏️ 编辑</button>
+                                <button type="button" id="btn-create-platform-ui" class="settings-mini-btn" style="padding: 0 10px; margin-left: 4px;">➕ 新增</button>
+                            </div>
                         </div>
-                    </div>
-                    <div class="settings-row">
-                        <label>模型名称</label>
-                        <div class="settings-inline-actions">
-                            <select id="set-ai-model"></select>
-                            <button type="button" id="btn-add-model" class="settings-mini-btn vip-only">+ 添加</button>
+                        <div class="settings-row">
+                            <label>模型名称</label>
+                            <div class="settings-inline-actions">
+                                <select id="set-ai-model"></select>
+                            </div>
                         </div>
-                    </div>
-                    <div class="settings-row vip-only">
-                        <label>添加平台</label>
-                        <div class="settings-inline-actions">
-                            <input type="text" id="set-custom-platform"
-                                placeholder="输入平台名，如 deepseek / nvidia / openrouter">
-                            <button type="button" id="btn-add-platform" class="settings-mini-btn"
-                                style="margin-left:8px;">+ 添加</button>
-                        </div>
-                    </div>
-                    <div class="settings-row settings-row-list vip-only">
-                        <label>平台列表</label>
-                        <div id="custom-platform-list" class="settings-chip-list"></div>
-                    </div>
-                    <div class="settings-row vip-only">
-                        <label>添加模型</label>
-                        <div class="settings-inline-actions">
-                            <input type="text" id="set-custom-model" placeholder="输入模型名，如 deepseek-chat / gpt-4o-mini">
-                            <button type="button" id="btn-add-model-input" class="settings-mini-btn"
-                                style="margin-left:8px;">+ 添加</button>
-                        </div>
-                    </div>
-                    <div class="settings-row settings-row-list vip-only">
-                        <label>当前平台模型</label>
-                        <div id="custom-model-list" class="settings-chip-list"></div>
-                    </div>
-                    <div class="settings-row vip-only" id="ai-base-row">
-                        <label>API 地址</label>
-                        <input type="text" id="set-ai-base" placeholder="可选，如 https://api.openai.com/v1">
-                    </div>
-                    <div class="settings-row vip-only" id="ai-key-row">
-                        <label>API Key</label>
-                        <div class="settings-key-wrap">
-                            <input type="password" id="set-ai-key" placeholder="输入你的 API Key">
-                            <button type="button" id="btn-toggle-ai-key" class="settings-eye-btn"
-                                title="显示/隐藏 API Key">👁</button>
-                        </div>
-                        <small id="set-ai-key-hint" class="text-gray-500"></small>
-                    </div>
-                    <div id="settings-permission-tip" class="text-gray-500" style="margin-top:6px;"></div>
-                    <div id="settings-role-rules" style="margin-top:10px;"></div>
-                </div>
+                        <div id="settings-permission-tip" class="text-gray-500" style="margin-top:6px;"></div>
+                        <div id="settings-role-rules" style="margin-top:10px;"></div>
+                     </div>
                 <div class="settings-section">
                     <h3>📊 统计图表期数</h3>
                     <div class="settings-row"><label>生肖路单</label><input type="number" id="set-zodiac-trend" min="10"
@@ -1103,6 +1069,116 @@
                 </div>
             </div>
         </div>
+        
+        <!-- 供应商编辑页面容器 -->
+        <div id="provider-edit-container" style="display: none; flex-direction: column; height: 100%;">
+            <div class="settings-header">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <button type="button" id="btn-back-provider" class="btn-back-round" title="返回">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="19" y1="12" x2="5" y2="12"></line>
+                            <polyline points="12 19 5 12 12 5"></polyline>
+                        </svg>
+                    </button>
+                    <h2 id="provider-title">编辑供应商</h2>
+                </div>
+                <button class="settings-close" id="btn-close-provider">&times;</button>
+            </div>
+            <div class="settings-body">
+                <div class="provider-form">
+                    <!-- 供应商名称 & 备注并排 -->
+                    <div class="provider-form-row two-cols">
+                        <div class="form-col">
+                            <label>供应商名称</label>
+                            <input type="text" id="edit-provider-name" placeholder="如 deepseek / Gcloud">
+                        </div>
+                        <div class="form-col">
+                            <label>备注</label>
+                            <input type="text" id="edit-provider-remark" placeholder="备注，如 谷歌云模型">
+                        </div>
+                    </div>
+                    
+                    <div class="provider-form-row">
+                        <label>官网链接</label>
+                        <input type="text" id="edit-provider-url" placeholder="如 https://platform.openai.com">
+                    </div>
+                    
+                    <div class="provider-form-row">
+                        <label>接口格式</label>
+                        <select id="edit-provider-format">
+                            <option value="openai">OpenAI Compatible</option>
+                            <option value="google">Google Gemini</option>
+                        </select>
+                        <small class="form-hint">选择 AI 服务的 API 接口格式</small>
+                    </div>
+                    
+                    <div class="provider-form-row">
+                        <label>API Key</label>
+                        <div class="settings-key-wrap">
+                            <input type="password" id="edit-provider-key" placeholder="输入你的 API Key">
+                            <button type="button" id="btn-toggle-provider-key" class="settings-eye-btn" title="显示/隐藏 API Key">👁</button>
+                        </div>
+                        <div style="margin-top: 4px;">
+                            <a href="javascript:void(0);" id="btn-get-provider-key" class="form-link" target="_blank" style="font-size: 0.76rem; color: #3b82f6; text-decoration: none;">获取 API Key</a>
+                        </div>
+                    </div>
+                    
+                    <div class="provider-form-row">
+                        <label>Base URL</label>
+                        <input type="text" id="edit-provider-base" placeholder="自定义 API 端点地址，如 https://api.openai.com/v1">
+                        <small class="form-hint">自定义 API 端点地址</small>
+                    </div>
+                    
+                    <!-- 装饰性分界线 -->
+                    <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.08); margin: 20px 0;">
+                    
+                    <!-- 模型配置 -->
+                    <div class="provider-models-section">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <label style="font-size: 0.88rem; font-weight: 700; color: var(--accent-gold); margin: 0;">模型配置</label>
+                            <div style="display: flex; gap: 8px;">
+                                <button type="button" id="btn-fetch-models" class="btn-outline-style">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: middle;">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="7 10 12 15 17 10"></polyline>
+                                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                                    </svg>获取模型列表
+                                </button>
+                                <button type="button" id="btn-add-model-row" class="btn-outline-style">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: middle;">
+                                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                                    </svg>添加模型
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="provider-models-list-container" class="provider-models-list">
+                            <!-- 模型行列表 -->
+                        </div>
+                    </div>
+                    
+                    <!-- 表单底部保存与删除 -->
+                    <div class="provider-form-footer" style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px;">
+                        <button type="button" id="btn-delete-provider" class="btn-delete-provider-style" style="display: none;">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: middle;">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>删除供应商
+                        </button>
+                        <div style="flex-grow: 1;"></div>
+                        <button type="button" id="btn-save-provider" class="btn-save-provider-style">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 5px; vertical-align: middle;">
+                                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                                <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                            </svg>保存
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+    </div>
     </div>
 
 </body>

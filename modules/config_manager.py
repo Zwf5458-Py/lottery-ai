@@ -21,7 +21,17 @@ CONFIG_PATH = os.path.join(
 PLATFORM_OWNER_USERNAME = os.environ.get("PLATFORM_OWNER_USERNAME", "zwf5458")
 
 DEFAULT_CONFIG = {
-    "ai": {"platform": "local", "model": "gpt-5.4", "api_key": ""},
+    "ai": {
+        "platform": "local",
+        "model": "gpt-5.4",
+        "api_key": "",
+        "providers": {
+            "google": {"api_base": "", "api_key": ""},
+            "openai": {"api_base": "https://api.openai.com/v1", "api_key": ""},
+            "nvidia": {"api_base": "https://integrate.api.nvidia.com/v1", "api_key": ""},
+            "local": {"api_base": "http://127.0.0.1:8317/v1", "api_key": ""}
+        }
+    },
     "chart_periods": {
         "zodiac_trend": 200,
         "odd_even": 100,
@@ -88,12 +98,28 @@ def save_config(data: dict, user_id=None) -> bool:
 
     # 降级：保存到全局 config.json
     try:
+        # 丢弃遮罩密钥以保留原有的加密密钥
+        if "ai" in data:
+            ai_data = data["ai"]
+            if ai_data.get("api_key") and "****" in ai_data["api_key"]:
+                del ai_data["api_key"]
+            if "providers" in ai_data and isinstance(ai_data["providers"], dict):
+                for p_name, p_cfg in list(ai_data["providers"].items()):
+                    if isinstance(p_cfg, dict) and p_cfg.get("api_key") and "****" in p_cfg["api_key"]:
+                        del p_cfg["api_key"]
+
         current = load_config()
         merged = _deep_merge(current, data)
         # 加密 API Key
         if "ai" in merged and merged["ai"].get("api_key"):
             if not is_encrypted(merged["ai"]["api_key"]):
                 merged["ai"]["api_key"] = encrypt_api_key(merged["ai"]["api_key"])
+        # 加密各平台（providers）独立的 API Key
+        if "ai" in merged and "providers" in merged["ai"] and isinstance(merged["ai"]["providers"], dict):
+            for p_name, p_cfg in merged["ai"]["providers"].items():
+                if isinstance(p_cfg, dict) and p_cfg.get("api_key"):
+                    if not is_encrypted(p_cfg["api_key"]):
+                        p_cfg["api_key"] = encrypt_api_key(p_cfg["api_key"])
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(merged, f, indent=2, ensure_ascii=False)
         return True
@@ -130,6 +156,13 @@ def get_ai_config(user_id=None) -> dict:
     ai_cfg = load_config(user_id).get("ai", DEFAULT_CONFIG["ai"])
     if ai_cfg.get("api_key"):
         ai_cfg["api_key"] = decrypt_api_key(ai_cfg["api_key"])
+    
+    # 额外解密各个独立平台（provider）下的 api_key
+    providers = ai_cfg.get("providers", {})
+    if isinstance(providers, dict):
+        for p_name, p_cfg in providers.items():
+            if isinstance(p_cfg, dict) and p_cfg.get("api_key"):
+                p_cfg["api_key"] = decrypt_api_key(p_cfg["api_key"])
     return ai_cfg
 
 
@@ -237,6 +270,16 @@ def _save_user_config(data: dict, user_id: int) -> bool:
     try:
         from modules.auth import get_user_db_connection
 
+        # 丢弃遮罩密钥以保留原有的加密密钥
+        if "ai" in data:
+            ai_data = data["ai"]
+            if ai_data.get("api_key") and "****" in ai_data["api_key"]:
+                del ai_data["api_key"]
+            if "providers" in ai_data and isinstance(ai_data["providers"], dict):
+                for p_name, p_cfg in list(ai_data["providers"].items()):
+                    if isinstance(p_cfg, dict) and p_cfg.get("api_key") and "****" in p_cfg["api_key"]:
+                        del p_cfg["api_key"]
+
         current = _load_user_config(user_id)
         merged = _deep_merge(current, data)
 
@@ -244,6 +287,12 @@ def _save_user_config(data: dict, user_id: int) -> bool:
         if "ai" in merged and merged["ai"].get("api_key"):
             if not is_encrypted(merged["ai"]["api_key"]):
                 merged["ai"]["api_key"] = encrypt_api_key(merged["ai"]["api_key"])
+        # 加密各平台（providers）独立的 API Key
+        if "ai" in merged and "providers" in merged["ai"] and isinstance(merged["ai"]["providers"], dict):
+            for p_name, p_cfg in merged["ai"]["providers"].items():
+                if isinstance(p_cfg, dict) and p_cfg.get("api_key"):
+                    if not is_encrypted(p_cfg["api_key"]):
+                        p_cfg["api_key"] = encrypt_api_key(p_cfg["api_key"])
 
         conn = get_user_db_connection(user_id)
         for key in ["ai", "chart_periods"]:
