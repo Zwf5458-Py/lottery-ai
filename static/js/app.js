@@ -327,6 +327,16 @@ function initLotteryTypeSelector() {
 function updateUIForLotteryType() {
     const isWeilitsai = state.lotteryType === 'weilitsai';
     
+    // 更新历史记录开奖 Tab 按钮文本
+    const btnHistoryDraw = document.getElementById('btn-history-draw');
+    if (btnHistoryDraw) {
+        if (historySubTab === 'draw') {
+            btnHistoryDraw.innerHTML = '📊 开奖记录 <span style="font-size:0.8rem;opacity:0.8;">↗️</span>';
+        } else {
+            btnHistoryDraw.innerHTML = '📊 开奖记录';
+        }
+    }
+    
     const numbersCol = document.getElementById('history-numbers-col');
     if (numbersCol) {
         numbersCol.textContent = isWeilitsai ? '第一區' : '正码';
@@ -2263,15 +2273,31 @@ function showBatchResult(data) {
 let historySubTab = 'draw'; // 'draw' or 'ai'
 
 function switchHistoryTab(tab) {
-    historySubTab = tab;
-    document.getElementById('btn-history-draw').classList.toggle('active', tab === 'draw');
-    document.getElementById('btn-history-ai').classList.toggle('active', tab === 'ai');
-    document.getElementById('history-draw-section').style.display = tab === 'draw' ? 'block' : 'none';
-    document.getElementById('history-ai-section').style.display = tab === 'ai' ? 'block' : 'none';
+    const isWeilitsai = state.lotteryType === 'weilitsai';
+    const link = isWeilitsai 
+        ? "https://www.taiwanlottery.com/lotto/result/super_lotto638" 
+        : "https://macaujc.com/macaujc2/";
 
     if (tab === 'draw') {
+        if (historySubTab === 'draw') {
+            // 如果已经是开奖记录 Tab，再次点击则在新窗口打开官方开奖页面
+            window.open(link, '_blank');
+            return;
+        }
+        historySubTab = tab;
+        document.getElementById('btn-history-draw').innerHTML = '📊 开奖记录 <span style="font-size:0.8rem;opacity:0.8;">↗️</span>';
+        document.getElementById('btn-history-draw').classList.add('active');
+        document.getElementById('btn-history-ai').classList.remove('active');
+        document.getElementById('history-draw-section').style.display = 'block';
+        document.getElementById('history-ai-section').style.display = 'none';
         loadHistory(state.historyPage || 1);
     } else {
+        historySubTab = tab;
+        document.getElementById('btn-history-draw').innerHTML = '📊 开奖记录';
+        document.getElementById('btn-history-draw').classList.remove('active');
+        document.getElementById('btn-history-ai').classList.add('active');
+        document.getElementById('history-draw-section').style.display = 'none';
+        document.getElementById('history-ai-section').style.display = 'block';
         loadAIHistory(state.aiHistoryPage || 1);
     }
 }

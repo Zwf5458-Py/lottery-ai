@@ -44,6 +44,9 @@ logs/
 
 # Database (keep structure, ignore data)
 data/*.db
+!data/lottery.db
+data/*.db-shm
+data/*.db-wal
 data/user_dbs/*.db
 !data/.gitkeep
 
