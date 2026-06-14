@@ -3403,7 +3403,11 @@ function addModelRow(modelId = '', displayName = '') {
 }
 
 // 代理向后端请求模型列表
-async function fetchProviderModels() {
+async function fetchProviderModels(e) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
     const btn = document.getElementById('btn-fetch-models');
     const origText = btn ? btn.innerHTML : '';
     const name = normalizePlatformName(document.getElementById('edit-provider-name')?.value || '');

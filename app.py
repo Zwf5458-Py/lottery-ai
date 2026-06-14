@@ -1212,7 +1212,7 @@ def api_fetch_models():
                 return jsonify({
                     "success": False,
                     "error": f"接口返回错误 ({response.status_code}): {response.text[:200]}"
-                }), response.status_code
+                }), 400
             res_data = response.json()
             models_list = []
             for m in res_data.get("models", []):
@@ -1228,7 +1228,7 @@ def api_fetch_models():
                 return jsonify({
                     "success": False,
                     "error": f"接口返回错误 ({response.status_code}): {response.text[:200]}"
-                }), response.status_code
+                }), 400
             res_data = response.json()
             models_list = [m.get("id") for m in res_data.get("data", []) if m.get("id")]
 
