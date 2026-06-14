@@ -19,11 +19,8 @@ from modules.logger import get_logger
 
 logger = get_logger()
 
-# 创建不验证证书的 SSL 上下文（解决部分环境 SSL 握手失败问题）
-ssl_context = ssl.create_default_context()
-if os.environ.get("INSECURE_SSL", "0") == "1":
-    ssl_context.check_hostname = False
-    ssl_context.verify_mode = ssl.CERT_NONE
+# 创建不验证证书的 SSL 上下文（解决大部分环境因根证书缺失导致 SSL 验证失败的问题）
+ssl_context = ssl._create_unverified_context()
 
 # 数据库路径
 DB_DIR = os.path.dirname(__file__)
@@ -127,7 +124,14 @@ def fetch_year_data_with_fallback(
                     with urllib.request.urlopen(
                         req, timeout=15, context=ssl_context
                     ) as response:
-                        html = response.read().decode("utf-8", errors="ignore")
+                        raw_bytes = response.read()
+                        if raw_bytes.startswith(b'\x1f\x8b'):
+                            import gzip
+                            try:
+                                raw_bytes = gzip.decompress(raw_bytes)
+                            except Exception:
+                                pass
+                        html = raw_bytes.decode("utf-8", errors="ignore")
                     soup = BeautifulSoup(html, "html.parser")
                     tables = soup.find_all("table")
                     if len(tables) >= 2:
@@ -223,14 +227,21 @@ def fetch_year_data_with_fallback(
                         "Origin": "https://macaujc.com",
                         "Accept": "application/json, text/plain, */*",
                         "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-                        "Accept-Encoding": "gzip, deflate, br",
+                        "Accept-Encoding": "identity",
                         "Connection": "keep-alive",
                     },
                 )
                 with urllib.request.urlopen(
                     req, timeout=30, context=ssl_context
                 ) as response:
-                    data = json.loads(response.read().decode("utf-8"))
+                    raw_bytes = response.read()
+                    if raw_bytes.startswith(b'\x1f\x8b'):
+                        import gzip
+                        try:
+                            raw_bytes = gzip.decompress(raw_bytes)
+                        except Exception as ge:
+                            logger.error(f"  ❌ Gzip解压失败: {ge}")
+                    data = json.loads(raw_bytes.decode("utf-8", errors="ignore"))
 
                 if data.get("result") and data.get("data"):
                     logger.info(
