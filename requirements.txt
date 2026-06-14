@@ -1,6 +1,7 @@
 Flask==3.1.0
 pandas>=2.2.0
 google-genai
+beautifulsoup4>=4.12.0
 python-dotenv==1.0.1
 Flask-Caching==2.3.0
 Flask-Limiter==3.8.0
