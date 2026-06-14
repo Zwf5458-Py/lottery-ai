@@ -773,7 +773,7 @@ def _build_common_dimensions(stats: dict, dimensions: list) -> list:
 
 def _build_zodiac_prompt(stats: dict, lottery_type: str, dimensions: list) -> str:
     """构建生肖专属推算 Prompt"""
-    type_name = '新澳门六合彩' if lottery_type == 'macaujc2' else '澳门六合彩'
+    type_name = '新澳' if lottery_type == 'macaujc2' else '澳门六合彩'
     
     # 收集所有生肖相关的维度数据
     sections = []
@@ -1180,21 +1180,21 @@ def _build_analysis_prompt(stats: dict, lottery_type: str, dimensions: list, pre
                 weight_cfg = stats.get('markov', {}).get('weights', {})
                 markov_str = "暂无"
                 if weight_cfg:
-                    z_weights = {int(k): v for k, v in dict(weight_cfg).items() if str(k).isdigit() and 1 <= int(k) <= 8}
+                    z_weights = {int(k): v for k, v in dict(weight_cfg).items() if str(k).isdigit() and 1 <= int(k) <= 38}
                     is_sig = weight_cfg.get('_is_significant', True)
                     chi_val = weight_cfg.get('_chi_square_val', 0)
                     sorted_z = sorted(z_weights.items(), key=lambda x: x[1], reverse=True)
-                    top_3 = [f"{num}号(跃迁权重 {w:.2f})" for num, w in sorted_z[:3]]
-                    bottom_3 = [f"{num}号(跃迁权重 {w:.2f})" for num, w in sorted_z[-3:]]
+                    top_5 = [f"{num}号(跃迁权重 {w:.2f})" for num, w in sorted_z[:5]]
+                    bottom_5 = [f"{num}号(跃迁权重 {w:.2f})" for num, w in sorted_z[-5:]]
                     sig_text = f"【显著有效】卡方检验验证(x²={chi_val})。" if is_sig else f"【噪音警告】卡方检验不显著(x²={chi_val} < 14.0671)。"
                     markov_str = (
-                        f"基于第二區特别号全量数据的马尔可夫链状态转移：\n - {sig_text}\n"
-                        f" - 极高概率跃迁目标：{', '.join(top_3)}\n"
-                        f" - 最小概率跃迁目标：{', '.join(bottom_3)}"
+                        f"基于第一區号码全量数据的马尔可夫链状态转移：\n - {sig_text}\n"
+                        f" - 极高概率跃迁目标：{', '.join(top_5)}\n"
+                        f" - 最小概率跃迁目标：{', '.join(bottom_5)}"
                     )
-                sections.append(f"### 🕸️ 马尔可夫链第二區特别号跃迁推演\n{markov_str}")
+                sections.append(f"### 🕸️ 马尔可夫链第一區号码跃迁推演\n{markov_str}")
             except:
-                sections.append("### 🕸️ 马尔可夫链第二區特别号跃迁推演\n暂无数据")
+                sections.append("### 🕸️ 马尔可夫链第一區号码跃迁推演\n暂无数据")
 
         if 'consecutive' in dimensions:
             try:
@@ -1404,7 +1404,7 @@ def _build_analysis_prompt(stats: dict, lottery_type: str, dimensions: list, pre
 }}"""
         return prompt
 
-    type_name = '新澳门六合彩' if lottery_type == 'macaujc2' else '澳门六合彩'
+    type_name = '新澳' if lottery_type == 'macaujc2' else '澳门六合彩'
     dim_names = {
         'big_small': '大小走势',
         'odd_even': '单双走势',

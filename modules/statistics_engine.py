@@ -299,8 +299,64 @@ def odd_even_ratio(df: pd.DataFrame = None, periods: int = 100, lottery_type: st
     if df is None:
         df = clean_data(load_data(lottery_type))
         
+    if lottery_type == 'weilitsai' and zone == 1:
+        # 威力彩 1 区 6 个正码球的单双比走势统计
+        cols = ['num1', 'num2', 'num3', 'num4', 'num5', 'num6']
+        total_odd = 0
+        for col in cols:
+            if col in df.columns:
+                total_odd += df[col].apply(lambda x: x % 2 == 1).sum()
+        total_even = (len(df) * 6) - total_odd
+        
+        df_recent = df.head(periods).iloc[::-1]
+        labels = []
+        values = []
+        current_type = None
+        current_val = 0
+        
+        for _, row in df_recent.iterrows():
+            draw_nums = [row.get(c) for c in cols]
+            odd_count = sum(1 for n in draw_nums if pd.notna(n) and int(n) % 2 == 1)
+            is_odd = odd_count >= 3
+            labels.append(str(row.get('draw_number', '')))
+            
+            if is_odd:
+                if current_type == '奇':
+                    current_val += 1
+                else:
+                    current_type = '奇'
+                    current_val = 1
+                values.append(current_val)
+            else:
+                if current_type == '偶':
+                    current_val -= 1
+                else:
+                    current_type = '偶'
+                    current_val = -1
+                values.append(current_val)
+        
+        current_jumps = 0
+        if values:
+            current_state = values[-1] > 0
+            for i in range(len(values) - 2, -1, -1):
+                prev_state = values[i] > 0
+                if current_state != prev_state:
+                    current_jumps += 1
+                    current_state = prev_state
+                else:
+                    break
+                    
+        return {
+            'labels': labels,
+            'values': values,
+            'total_odd': int(total_odd),
+            'total_even': int(total_even),
+            'current_jumps': int(current_jumps)
+        }
+
+    # 非威力彩一区的情况（例如威力彩二区，或者六合彩特码等）
     if lottery_type == 'weilitsai':
-        target_col = 'special_num' if zone == 2 else 'num1' # just fallback to num1 if zone 1 is forced, though usually zone 2 is used
+        target_col = 'special_num' if zone == 2 else 'num1'
     else:
         target_col = 'special_num'
 
@@ -338,7 +394,7 @@ def odd_even_ratio(df: pd.DataFrame = None, periods: int = 100, lottery_type: st
                 current_val = -1
             values.append(current_val)
             
-    # 计算当前单跳次数（从最近一期往回看，A-B-A-B交替）
+    # 计算奇偶当前单跳次数
     def _get_alternating_jumps(vals):
         if len(vals) < 2: return 0
         jumps = 0
@@ -361,8 +417,6 @@ def odd_even_ratio(df: pd.DataFrame = None, periods: int = 100, lottery_type: st
         'total_even': int(total_even),
         'current_jumps': current_jumps
     }
-
-
 def big_small_ratio(df: pd.DataFrame = None, periods: int = 100, lottery_type: str = 'macaujc', zone: int = 2) -> dict:
     """
     特码大小时间轴 K 线数据
@@ -370,6 +424,60 @@ def big_small_ratio(df: pd.DataFrame = None, periods: int = 100, lottery_type: s
     if df is None:
         df = clean_data(load_data(lottery_type))
     
+    if lottery_type == 'weilitsai' and zone == 1:
+        # 威力彩 1 区 6 个正码球的大小比走势统计
+        cols = ['num1', 'num2', 'num3', 'num4', 'num5', 'num6']
+        total_big = 0
+        for col in cols:
+            total_big += df[col].apply(lambda x: x >= 20).sum()
+        total_small = (len(df) * 6) - total_big
+        
+        df_recent = df.head(periods).iloc[::-1]
+        labels = []
+        values = []
+        current_type = None
+        current_val = 0
+        
+        for _, row in df_recent.iterrows():
+            draw_nums = [row.get(c) for c in cols]
+            big_count = sum(1 for n in draw_nums if pd.notna(n) and int(n) >= 20)
+            is_big = big_count >= 3
+            labels.append(str(row.get('draw_number', '')))
+            
+            if is_big:
+                if current_type == '大':
+                    current_val += 1
+                else:
+                    current_type = '大'
+                    current_val = 1
+                values.append(current_val)
+            else:
+                if current_type == '小':
+                    current_val -= 1
+                else:
+                    current_type = '小'
+                    current_val = -1
+                values.append(current_val)
+        
+        current_jumps = 0
+        if values:
+            current_state = values[-1] > 0
+            for i in range(len(values) - 2, -1, -1):
+                prev_state = values[i] > 0
+                if current_state != prev_state:
+                    current_jumps += 1
+                    current_state = prev_state
+                else:
+                    break
+                    
+        return {
+            'labels': labels,
+            'values': values,
+            'total_big': int(total_big),
+            'total_small': int(total_small),
+            'current_jumps': int(current_jumps)
+        }
+
     if lottery_type == 'weilitsai':
         target_col = 'special_num' if zone == 2 else 'num1'
         threshold = 5 if zone == 2 else 20

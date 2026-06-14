@@ -920,7 +920,7 @@ def api_simulate_wheeling():
     pool_size = matrix_template['pool_size']
     
     # 分层抽样：分别从大号和小号中挑选出权重最高的号码，避免单一趋势权重失衡导致大号完全不被分析覆盖
-    bs_split = 19 if lottery_type == 'weilitsai' else 25
+    bs_split = 20 if lottery_type == 'weilitsai' else 25
     
     big_candidates = [x for x in num_weights if x['num'] >= bs_split]
     small_candidates = [x for x in num_weights if x['num'] < bs_split]

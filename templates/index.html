@@ -251,6 +251,225 @@
             return originalFetch(resource, config);
         };
     </script>
+    <style>
+        /* ===== 用户下拉菜单样式 ===== */
+        .user-dropdown {
+            position: relative;
+            display: inline-block;
+            margin-left: 14px;
+        }
+
+        .dropdown-trigger {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 6px 14px;
+            border-radius: 9999px;
+            color: #d1d5db;
+            font-size: 0.88rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(8px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        .dropdown-trigger:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.16);
+            color: #ffffff;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        .trigger-avatar {
+            font-size: 0.95rem;
+        }
+
+        .trigger-name {
+            max-width: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .role-tag {
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 1px 6px;
+            border-radius: 6px;
+            letter-spacing: 0.3px;
+        }
+
+        .tag-admin {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: #ffffff;
+        }
+
+        .tag-vip {
+            background: linear-gradient(135deg, #f59e0b, #f97316);
+            color: #ffffff;
+        }
+
+        .tag-guest {
+            background: rgba(156, 163, 175, 0.15);
+            color: #9ca3af;
+            border: 1px solid rgba(156, 163, 175, 0.2);
+        }
+
+        .trigger-arrow {
+            font-size: 0.65rem;
+            color: #9ca3af;
+            transition: transform 0.2s;
+            margin-left: 2px;
+        }
+
+        /* 悬停时旋转箭头 */
+        .user-dropdown:hover .trigger-arrow {
+            transform: rotate(180deg);
+        }
+
+        /* 下拉面板 */
+        .dropdown-menu {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 8px;
+            width: 220px;
+            background: rgba(17, 24, 39, 0.92);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
+            padding: 6px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            z-index: 1000;
+            
+            /* 展开收回动效 */
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-8px) scale(0.95);
+            transform-origin: top right;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* 鼠标悬停在下拉菜单或触发器上时显示 */
+        .user-dropdown:hover .dropdown-menu {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0) scale(1);
+        }
+
+        /* 增加缓冲透明覆盖层，防止鼠标划出瞬间下拉菜单消失 */
+        .dropdown-menu::before {
+            content: '';
+            position: absolute;
+            top: -12px;
+            left: 0;
+            width: 100%;
+            height: 12px;
+            background: transparent;
+        }
+
+        /* 头部身份区 */
+        .dropdown-header {
+            padding: 10px 12px 8px 12px;
+        }
+
+        .header-user {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        .header-name {
+            font-size: 0.92rem;
+            font-weight: 600;
+            color: #f3f4f6;
+        }
+
+        .header-status {
+            font-size: 0.72rem;
+            color: #34d399;
+            background: rgba(52, 211, 153, 0.1);
+            padding: 1px 6px;
+            border-radius: 9999px;
+            font-weight: 500;
+        }
+
+        .header-role {
+            font-size: 0.78rem;
+            color: #9ca3af;
+        }
+
+        .badge-admin {
+            color: #f87171;
+            font-weight: 500;
+        }
+
+        .badge-vip {
+            color: #fbbf24;
+            font-weight: 500;
+        }
+
+        .badge-guest {
+            color: #9ca3af;
+        }
+
+        .dropdown-divider {
+            height: 1px;
+            background: rgba(255, 255, 255, 0.08);
+            margin: 6px 4px;
+        }
+
+        /* 下拉条目 */
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            background: transparent;
+            border: 1px solid transparent;
+            padding: 8px 12px;
+            border-radius: 8px;
+            color: #9ca3af;
+            font-size: 0.85rem;
+            font-weight: 500;
+            text-align: left;
+            text-decoration: none;
+            cursor: pointer;
+            box-sizing: border-box;
+            transition: all 0.2s ease;
+        }
+
+        .dropdown-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.04);
+            color: #ffffff;
+            transform: translateX(4px);
+        }
+
+        .item-icon {
+            font-size: 0.95rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+        }
+
+        /* 退出登录专属样式 */
+        .dropdown-item.logout-btn {
+            color: #f87171;
+        }
+
+        .dropdown-item.logout-btn:hover {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: rgba(239, 68, 68, 0.15);
+            color: #fca5a5;
+        }
+    </style>
 </head>
 
 <body>
@@ -271,46 +490,73 @@
         </div>
         <div class="nav-controls">
             <div class="lottery-type-selector">
-                <button class="type-btn" data-type="macaujc2">新澳门六合彩</button>
+                <button class="type-btn" data-type="macaujc2">新澳</button>
                 <button class="type-btn active" data-type="weilitsai">威力彩</button>
             </div>
             <div class="nav-tabs">
                 <button class="nav-tab active" data-tab="statistics" id="tab-stats">📊 统计分析</button>
                 <button class="nav-tab" data-tab="simulator" id="tab-sim">🎲 智能模拟</button>
-                <button class="nav-tab active" data-tab="history" id="tab-history">📋 历史记录</button>
+                <button class="nav-tab" data-tab="history" id="tab-history">📋 历史记录</button>
             </div>
-            <button class="settings-btn" id="btn-open-settings" title="系统设置">⚙️</button>
-            <!-- 用户身份栏 -->
-            <div class="user-bar"
-                style="display:flex; align-items:center; gap:10px; margin-left:14px; padding-left:14px; border-left:1px solid rgba(255,255,255,0.12);">
-                {% if user %}
-                <span style="font-size:0.88rem; color:#d1d5db; white-space:nowrap;">
-                    👤 {{ user.username }}
-                </span>
-                {% if user.role == 'admin' %}
-                <span
-                    style="background:linear-gradient(135deg,#ef4444,#dc2626); color:#fff; font-size:0.72rem; font-weight:800; padding:3px 10px; border-radius:8px; letter-spacing:0.5px;">管理员</span>
-                <a href="/admin"
-                    style="display:inline-flex; align-items:center; gap:3px; color:#f59e0b; font-size:0.82rem; font-weight:600; text-decoration:none; padding:4px 12px; border-radius:8px; border:1px solid rgba(245,158,11,0.25); transition:all 0.2s; white-space:nowrap;"
-                    onmouseover="this.style.background='rgba(245,158,11,0.15)'"
-                    onmouseout="this.style.background='transparent'" title="后台管理">🛡️ 后台</a>
-                {% elif user.role == 'vip' %}
-                <span
-                    style="background:linear-gradient(135deg,#f59e0b,#f97316); color:#fff; font-size:0.72rem; font-weight:800; padding:3px 10px; border-radius:8px; letter-spacing:0.5px;">VIP</span>
-                {% else %}
-                <span
-                    style="background:rgba(107,114,128,0.3); color:#9ca3af; font-size:0.72rem; font-weight:600; padding:3px 10px; border-radius:8px;">体验版</span>
-                {% endif %}
-                <a href="/points"
-                    style="display:inline-flex; align-items:center; gap:4px; background:rgba(34,197,94,0.12); color:#86efac; font-size:0.82rem; font-weight:600; text-decoration:none; padding:5px 14px; border-radius:8px; border:1px solid rgba(34,197,94,0.28); transition:all 0.2s; white-space:nowrap;"
-                    onmouseover="this.style.background='rgba(34,197,94,0.22)'"
-                    onmouseout="this.style.background='rgba(34,197,94,0.12)'" title="积分中心">💎 积分中心</a>
-                <a href="/logout"
-                    style="display:inline-flex; align-items:center; gap:4px; background:rgba(239,68,68,0.15); color:#f87171; font-size:0.82rem; font-weight:600; text-decoration:none; padding:5px 14px; border-radius:8px; border:1px solid rgba(239,68,68,0.25); transition:all 0.2s; white-space:nowrap;"
-                    onmouseover="this.style.background='rgba(239,68,68,0.3)'"
-                    onmouseout="this.style.background='rgba(239,68,68,0.15)'" title="退出登录">🚪 退出</a>
-                {% endif %}
+            {% if user %}
+            <!-- 用户下拉菜单 (User Dropdown) -->
+            <div class="user-dropdown">
+                <button class="dropdown-trigger">
+                    <span class="trigger-avatar">👤</span>
+                    <span class="trigger-name">{{ user.username }}</span>
+                    {% if user.role == 'admin' %}
+                    <span class="role-tag tag-admin">管理员</span>
+                    {% elif user.role == 'vip' %}
+                    <span class="role-tag tag-vip">VIP</span>
+                    {% else %}
+                    <span class="role-tag tag-guest">体验版</span>
+                    {% endif %}
+                    <span class="trigger-arrow">▼</span>
+                </button>
+                <div class="dropdown-menu">
+                    <div class="dropdown-header">
+                        <div class="header-user">
+                            <span class="header-name">{{ user.username }}</span>
+                            <span class="header-status">在线</span>
+                        </div>
+                        <div class="header-role">
+                            {% if user.role == 'admin' %}
+                            <span class="role-badge badge-admin">🛡️ 系统管理员</span>
+                            {% elif user.role == 'vip' %}
+                            <span class="role-badge badge-vip">👑 VIP 尊享用户</span>
+                            {% else %}
+                            <span class="role-badge badge-guest">👤 体验版用户</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="dropdown-divider"></div>
+                    
+                    <button class="dropdown-item" id="btn-open-settings">
+                        <span class="item-icon">⚙️</span>
+                        <span class="item-text">系统设置</span>
+                    </button>
+                    
+                    {% if user.role == 'admin' %}
+                    <a href="/admin" class="dropdown-item">
+                        <span class="item-icon">🛡️</span>
+                        <span class="item-text">后台管理</span>
+                    </a>
+                    {% endif %}
+                    
+                    <a href="/points" class="dropdown-item">
+                        <span class="item-icon">💎</span>
+                        <span class="item-text">积分中心</span>
+                    </a>
+                    
+                    <div class="dropdown-divider"></div>
+                    
+                    <a href="/logout" class="dropdown-item logout-btn">
+                        <span class="item-icon">🚪</span>
+                        <span class="item-text">退出登录</span>
+                    </a>
+                </div>
             </div>
+            {% endif %}
         </div>
     </nav>
 

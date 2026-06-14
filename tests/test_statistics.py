@@ -217,3 +217,65 @@ class TestOmissionThresholds:
         assert thresholds[1]['current_omission'] == 8
         assert thresholds[1]['is_alert'] is True
         assert thresholds[2]['is_alert'] is False
+
+
+class TestWeilitsaiRatioStatistics:
+    """测试威力彩一区二区的大小奇偶比率统计功能"""
+    def test_weilitsai_zone1_odd_even_ratio(self):
+        # 真实数据为降序，造测试数据也为降序 (最新的 3 在最前，最老的 1 在最后)
+        df = pd.DataFrame({
+            'draw_date': ['2026-01-03', '2026-01-02', '2026-01-01'],
+            'draw_number': [3, 2, 1],
+            'draw_issue': ['003', '002', '001'],
+            'num1': [3, 2, 1], 
+            'num2': [13, 12, 11], 
+            'num3': [23, 22, 21], 
+            'num4': [33, 32, 31], 
+            'num5': [7, 6, 5], 
+            'num6': [17, 16, 15], 
+            'special_num': [3, 4, 5]
+        })
+        # 经 iloc[::-1] 倒序后为: 1 (奇/小), 2 (偶/大), 3 (奇/小)
+        result = odd_even_ratio(df, periods=3, lottery_type='weilitsai', zone=1)
+        assert result['total_odd'] == 12 # 6 (1期) + 6 (3期)
+        assert result['total_even'] == 6 # 6 (2期)
+        assert result['values'] == [1, -1, 1]
+
+    def test_weilitsai_zone1_big_small_ratio(self):
+        df = pd.DataFrame({
+            'draw_date': ['2026-01-02', '2026-01-01'],
+            'draw_number': [2, 1],
+            'draw_issue': ['002', '001'],
+            'num1': [20, 5], # 大, 小
+            'num2': [25, 10], 
+            'num3': [30, 15], 
+            'num4': [35, 19], 
+            'num5': [22, 2], 
+            'num6': [28, 18], 
+            'special_num': [8, 1]
+        })
+        # 经 iloc[::-1] 倒序后为: 1 (小), 2 (大)
+        result = big_small_ratio(df, periods=2, lottery_type='weilitsai', zone=1)
+        assert result['total_big'] == 6
+        assert result['total_small'] == 6
+        assert result['values'] == [-1, 1]
+
+    def test_weilitsai_zone2_big_small_ratio(self):
+        df = pd.DataFrame({
+            'draw_date': ['2026-01-04', '2026-01-03', '2026-01-02', '2026-01-01'],
+            'draw_number': [4, 3, 2, 1],
+            'draw_issue': ['004', '003', '002', '001'],
+            'num1': [1, 2, 3, 4],
+            'num2': [1, 2, 3, 4],
+            'num3': [1, 2, 3, 4],
+            'num4': [1, 2, 3, 4],
+            'num5': [1, 2, 3, 4],
+            'num6': [1, 2, 3, 4],
+            'special_num': [3, 8, 5, 4] # 小(<=4), 大(>=5), 大(>=5), 小(<=4)
+        })
+        # 经 iloc[::-1] 倒序后为: 1 (小) -> 2 (大) -> 3 (大) -> 4 (小)
+        result = big_small_ratio(df, periods=4, lottery_type='weilitsai', zone=2)
+        assert result['total_big'] == 2
+        assert result['total_small'] == 2
+        assert result['values'] == [-1, 1, 2, -1] # 4(小) -> -1; 5(大) -> 1; 8(大) -> 2; 3(小) -> -1
+

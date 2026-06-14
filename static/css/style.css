@@ -1220,10 +1220,22 @@ body::before {
         padding: 12px 12px;
         gap: 12px;
         align-items: stretch;
+        position: relative;
     }
 
     .nav-brand {
-        justify-content: center;
+        justify-content: flex-start;
+        width: 100%;
+        padding-right: 140px;
+        box-sizing: border-box;
+    }
+
+    .user-dropdown {
+        position: absolute !important;
+        top: 8px !important;
+        right: 12px !important;
+        margin-left: 0 !important;
+        z-index: 1001 !important;
     }
 
     .nav-brand h1 {
@@ -1299,7 +1311,7 @@ body::before {
     }
 
     .overview-cards {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: 1fr;
         gap: 12px;
     }
 
@@ -1375,7 +1387,7 @@ body::before {
     }
 
     .overview-cards {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: 1fr;
     }
 
     .stat-card {

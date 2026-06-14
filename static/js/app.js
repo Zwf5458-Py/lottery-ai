@@ -563,15 +563,13 @@ function renderStatistics(data) {
             const specialBallHtml = `<span class="overview-ball" style="display: inline-flex; align-items: center; justify-content: center; background: radial-gradient(circle at 30% 30%, #3b82f6, #0055d3); border-radius: 50%; color: #ffffff !important; -webkit-text-fill-color: #ffffff; font-weight: 900; font-family: Arial, Helvetica, sans-serif; box-shadow: 0 3px 8px rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.4); line-height: 1; text-shadow: 1px 1px 0 rgba(0,0,0,0.5); width: 28px; height: 28px; font-size: 0.85rem;">${latestNum}</span>`;
             
             infoEl.innerHTML = `
-                <div style="display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; flex-direction: column; gap: 6px;">
                     <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
                         ${regularBallsHtml}
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 6px;">
-                        <span style="font-size: 1rem; color: #a1a1aa; font-weight: bold;">+</span>
+                        <span style="font-size: 0.9rem; color: #a1a1aa; font-weight: bold; margin: 0 2px;">+</span>
                         ${specialBallHtml}
-                        <span style="font-size: 0.8rem; color: #9ca3af; font-weight: bold; margin-left: 4px;">上期开奖号码</span>
                     </div>
+                    <div style="font-size: 0.78rem; color: #9ca3af; font-weight: bold; margin-top: 2px;">上期开奖号码</div>
                 </div>
             `;
         }
@@ -4016,7 +4014,7 @@ async function loadSettings() {
     try {
         const titleEl = document.querySelector('.settings-header h2');
         if (titleEl) {
-            titleEl.textContent = state.lotteryType === 'weilitsai' ? '⚙️ 系统设置 (威力彩)' : '⚙️ 系统设置 (新澳门六合彩)';
+            titleEl.textContent = state.lotteryType === 'weilitsai' ? '⚙️ 系统设置 (威力彩)' : '⚙️ 系统设置 (新澳)';
         }
 
         const zodiacLabel = document.getElementById('set-zodiac-trend')?.previousElementSibling;
