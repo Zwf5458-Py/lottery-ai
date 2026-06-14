@@ -190,7 +190,7 @@ function renderRoleRules() {
     `;
 }
 
-function renderSimulationBillingTip() {
+async function renderSimulationBillingTip() {
     const el = document.getElementById('sim-billing-tip');
     if (!el) return;
 
@@ -210,8 +210,23 @@ function renderSimulationBillingTip() {
         border = 'rgba(34,197,94,.28)';
     }
 
+    // 尝试拉取当前配置，追加显示 AI 模型信息
+    let modelText = '';
+    try {
+        const res = await fetch('/api/settings?type=' + state.lotteryType);
+        const result = await res.json();
+        if (result.success && result.data && result.data.ai) {
+            const ai = result.data.ai;
+            const modelName = ai.model || '未设置';
+            const platformName = ai.platform || '未设置';
+            modelText = ` <span style="margin-left: 15px; color: #a855f7; background: rgba(168,85,247,0.12); padding: 2px 8px; border-radius: 6px; font-size: 0.8rem; border: 1px solid rgba(168,85,247,0.25); font-weight: normal;">🤖 当前 AI 模型: <strong style="color: #c084fc;">${modelName}</strong> (${platformName})</span>`;
+        }
+    } catch (e) {
+        console.error("加载当前 AI 模型配置失败:", e);
+    }
+
     el.style.borderColor = border;
-    el.innerHTML = `<strong style="color:${color};">${title}：</strong>${text}`;
+    el.innerHTML = `<strong style="color:${color};">${title}：</strong>${text}${modelText}`;
 }
 
 function initSpecialReferenceBoard() {
@@ -409,6 +424,9 @@ function updateUIForLotteryType() {
     if (resZodiac && isWeilitsai) {
         resZodiac.style.display = 'none';
     }
+
+    // 切换彩种时自动刷新 AI 模型提示
+    renderSimulationBillingTip();
 }
 
 
@@ -2403,34 +2421,69 @@ function getSelectedDimensions() {
 }
 
 // 渲染球号 HTML
-function renderBallsHtml(numbers, zodiacs, specialNum, specialZodiac, extraClass = '') {
-    let html = '';
-    
-    // Add Zone 1 Label if Weilitsai
-    if (state.lotteryType === 'weilitsai') {
-        html += `<div style="display:inline-flex;flex-direction:column;align-items:center;margin-right:10px;"><span style="font-size:0.8rem;color:#888;">第一區 (Zone 1)</span></div>`;
+function renderBallsHtml(numbers, zodiacs, specialNum, specialZodiac, extraClass = '', simpleMode = false) {
+    const isWeilitsai = state.lotteryType === 'weilitsai';
+
+    // 威力彩排版居中对齐优化
+    if (isWeilitsai && !simpleMode) {
+        let zone1Html = '';
+        numbers.forEach((n, i) => {
+            const colorClass = getBallColorClass(n, 1);
+            zone1Html += `<div style="display:inline-flex;flex-direction:column;align-items:center;margin: 0 4px;">
+                <div class="lottery-ball ${colorClass} ${extraClass}" style="animation-delay:${i * 0.1}s">${n}</div>
+            </div>`;
+        });
+
+        const spColorClass = getBallColorClass(specialNum, 2);
+        let zone2Html = `<div style="display:inline-flex;flex-direction:column;align-items:center;">
+            <div class="lottery-ball ${spColorClass} ${extraClass}">${specialNum}</div>
+        </div>`;
+
+        let html = '';
+        // 第一区大盒子 (文字垂直居中在6个球正上方)
+        html += `<div style="display:inline-flex;flex-direction:column;align-items:center;">
+            <span style="font-size:0.85rem;color:#94a3b8;margin-bottom:8px;font-weight:600;letter-spacing:0.5px;">第一區 (Zone 1)</span>
+            <div style="display:flex;justify-content:center;align-items:center;">${zone1Html}</div>
+        </div>`;
+        
+        // 分隔加号 (对齐球心线)
+        html += `<div class="ball-divider" style="align-self:flex-end;margin-bottom:12px;margin-left:14px;margin-right:14px;font-size:1.6rem;font-weight:bold;color:#64748b;height:42px;display:flex;align-items:center;">+</div>`;
+        
+        // 第二区大盒子 (文字垂直居中在1个球正上方)
+        html += `<div style="display:inline-flex;flex-direction:column;align-items:center;">
+            <span style="font-size:0.85rem;color:#94a3b8;margin-bottom:8px;font-weight:600;letter-spacing:0.5px;">第二區 (Zone 2)</span>
+            <div style="display:flex;justify-content:center;align-items:center;">${zone2Html}</div>
+        </div>`;
+        
+        return html;
     }
-    
+
+    // 非威力彩常规六合彩排版 (或 simpleMode 激活时的威力彩平铺排版)
+    let html = '';
     numbers.forEach((n, i) => {
         const colorClass = getBallColorClass(n, 1);
-        const zLabel = zodiacs && zodiacs[i] ? zodiacs[i] : '';
-        html += `<div style="display:inline-flex;flex-direction:column;align-items:center;">
-            <span class="ball-zodiac" style="margin-bottom: 4px; font-size: 0.8rem;${zLabel ? '' : ' height: 1.2rem;'}">${zLabel}</span>
-            <div class="lottery-ball ${colorClass} ${extraClass}" style="animation-delay:${i * 0.1}s">${n}</div>
+        const zLabel = isWeilitsai ? '' : (zodiacs && zodiacs[i] ? zodiacs[i] : '');
+        html += `<div style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;">`;
+        if (!isWeilitsai) {
+            html += `<span class="ball-zodiac" style="margin-bottom: 4px; font-size: 0.8rem;${zLabel ? '' : ' height: 1.2rem;'}">${zLabel}</span>`;
+        }
+        html += `<div class="lottery-ball ${colorClass} ${extraClass}" style="animation-delay:${i * 0.1}s">${n}</div>
         </div>`;
     });
-    html += `<div class="ball-divider" style="padding-top: 1.2rem;">+</div>`;
     
-    // Add Zone 2 Label if Weilitsai
-    if (state.lotteryType === 'weilitsai') {
-        html += `<div style="display:inline-flex;flex-direction:column;align-items:center;margin-right:10px;"><span style="font-size:0.8rem;color:#888;">第二區 (Zone 2)</span></div>`;
-    }
+    // 不管是否为 simpleMode，均输出加号分隔符，使用 inline-flex 确保不折行
+    // 不再使用 margin-left: auto 推至右侧，保持紧凑同行排列，防止中间断裂和多余空白
+    const plusPadding = isWeilitsai ? '' : 'padding-top: 1.2rem;';
+    const marginStyle = 'margin: 0 10px;';
+    html += `<div class="ball-divider" style="display: inline-flex !important; ${plusPadding} align-items: center; justify-content: center; font-size: 1.5rem; font-weight: bold; color: var(--text-secondary); ${marginStyle}">+</div>`;
     
     const spColorClass = getBallColorClass(specialNum, 2);
-    const spZLabel = specialZodiac || '';
-    html += `<div style="display:inline-flex;flex-direction:column;align-items:center;">
-        <span class="ball-zodiac" style="margin-bottom: 4px; font-size: 0.8rem; color: #facc15; font-weight: bold;${spZLabel ? '' : ' height: 1.2rem;'}">${spZLabel}</span>
-        <div class="lottery-ball ${spColorClass} ${extraClass}">${specialNum}</div>
+    const spZLabel = isWeilitsai ? '' : (specialZodiac || '');
+    html += `<div style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;">`;
+    if (!isWeilitsai) {
+        html += `<span class="ball-zodiac" style="margin-bottom: 4px; font-size: 0.8rem; color: #facc15; font-weight: bold;${spZLabel ? '' : ' height: 1.2rem;'}">${spZLabel}</span>`;
+    }
+    html += `<div class="lottery-ball ${spColorClass} ${extraClass}">${specialNum}</div>
     </div>`;
     return html;
 }
@@ -2706,6 +2759,22 @@ async function runAISimulation() {
                     const data = json.data;
                     document.getElementById('sim-batch-result').style.display = 'block';
                     
+                    // 如果有 AI 大模型推理结果，也渲染出来以关联 AI 模型推算
+                    const aiContainer = document.getElementById('sim-ai-result');
+                    if (data.ai_result && data.ai_result.success) {
+                        const ai = data.ai_result;
+                        aiContainer.style.display = 'block';
+                        document.getElementById('ai-confidence').textContent = `置信度: ${ai.confidence}`;
+                        document.getElementById('ai-result-balls').innerHTML = renderBallsHtml(
+                            ai.numbers, ai.zodiacs || [], ai.special_num, ai.special_zodiac || '', 'ai-ball'
+                        );
+                        let formattedText = formatAnalysisText(ai.analysis || '');
+                        document.getElementById('ai-analysis-text').innerHTML = formattedText;
+                        document.getElementById('ai-analysis-text').style.lineHeight = '1.8';
+                    } else {
+                        aiContainer.style.display = 'none';
+                    }
+                    
                     // Render summary
                     let summaryHtml = `<div class="summary-card">`;
                     if (data.summary.wheeling_info) {
@@ -2723,9 +2792,9 @@ async function runAISimulation() {
                         const classSpecial = state.lotteryType === 'weilitsai' ? 'weilitsai' : '';
                         drawsHtml += `
                             <div class="batch-draw-item">
-                                <span class="draw-idx">组合 ${i + 1}</span>
-                                <div class="draw-balls">
-                                    ${renderBallsHtml(d.numbers, d.zodiacs, d.special_num, d.special_zodiac, classSpecial)}
+                                <span class="batch-draw-index">组合 ${i + 1}</span>
+                                <div class="batch-draw-balls">
+                                    ${renderBallsHtml(d.numbers, d.zodiacs, d.special_num, d.special_zodiac, classSpecial, true)}
                                 </div>
                             </div>
                         `;
@@ -3955,7 +4024,7 @@ async function saveSettings() {
                 backup_model_1: backupModel1,
                 backup_platform_2: backupPlatform2,
                 backup_model_2: backupModel2,
-                custom_platforms: settingsCustomPlatforms.slice(),
+                custom_platforms: Array.isArray(settingsCustomPlatforms) ? settingsCustomPlatforms.slice() : [],
                 custom_platform_models: customPlatformModelsSync,
                 providers: payloadProviders,
             },
@@ -4013,6 +4082,7 @@ async function saveSettings() {
                 if (btn) { btn.textContent = origText; btn.disabled = false; }
                 state.statisticsLoaded = false;
                 loadStatistics();
+                renderSimulationBillingTip();
             }, 800);
         } else {
             showSettingsToast('保存失败: ' + (result.error || '未知错误'), 'error', true);
@@ -4068,7 +4138,7 @@ function renderAIHistory(items) {
         if (hasResult) {
             ballsHTML = `
                 <div style="display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0;">
-                    ${renderBallsHtml(ai.numbers, ai.zodiacs, ai.special_num, ai.special_zodiac, 'ai-ball')}
+                    ${renderBallsHtml(ai.numbers, ai.zodiacs, ai.special_num, ai.special_zodiac, 'ai-ball', true)}
                 </div>
             `;
         } else if (hasZodiacResult) {
@@ -4148,22 +4218,51 @@ function renderAIHistory(items) {
                             <div style="font-size: 0.7rem; color: #6b7280; margin-bottom: 12px; letter-spacing: 0.5px; text-transform: uppercase; font-weight: 700; display: flex; align-items: center; gap: 5px;">
                                 <span style="width: 3px; height: 10px; background: #a855f7; border-radius: 2px;"></span> 核心参考基准
                             </div>
-                            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                                ${(item.dimensions || ['默认维度']).map(function (d) {
-            var dimIcons = {
-                'zodiac_mode': '🐲', 'markov': '🔗', 'consecutive': '📈',
-                'bayesian': '🎯', 'lstm': '🧠', 'big_small': '⚖️',
-                'odd_even': '🔄', 'hot_cold': '🔥', 'tail': '🔢', 'zodiac': '🐾', 'color': '🎨'
-            };
-            var dimNames = {
-                'zodiac_mode': '生肖', 'markov': '马尔可夫', 'consecutive': '连续',
-                'bayesian': '贝叶斯', 'lstm': 'LSTM', 'big_small': '大小',
-                'odd_even': '单双', 'hot_cold': '冷热', 'tail': '尾数', 'zodiac': '生肖走势', 'color': '波色'
-            };
-            var icon = dimIcons[d] || '📌';
-            var label = dimNames[d] || d;
-            return '<div style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; background: rgba(168,85,247,0.06); border: 1px solid rgba(168,85,247,0.15); border-radius: 5px; font-size: 0.7rem; color: #c4b5fd; white-space: nowrap;">' + icon + ' ' + label + '</div>';
-        }).join('')}
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                ${(function() {
+                                    var dimIcons = {
+                                        'zodiac_mode': '🐲', 'markov': '🔗', 'consecutive': '📈',
+                                        'bayesian': '🎯', 'lstm': '🧠', 'big_small': '⚖️',
+                                        'odd_even': '🔄', 'hot_cold': '🔥', 'tail': '🔢', 'zodiac': '🐾', 'color': '🎨'
+                                    };
+                                    var dimNames = {
+                                        'zodiac_mode': '生肖', 'markov': '马尔可夫', 'consecutive': '连续',
+                                        'bayesian': '贝叶斯', 'lstm': 'LSTM', 'big_small': '大小',
+                                        'odd_even': '单双', 'hot_cold': '冷热', 'tail': '尾数', 'zodiac': '生肖走势', 'color': '波色'
+                                    };
+                                    
+                                    function renderTag(d) {
+                                        var icon = dimIcons[d] || '📌';
+                                        var label = dimNames[d] || d;
+                                        return `<div style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; background: rgba(168,85,247,0.06); border: 1px solid rgba(168,85,247,0.15); border-radius: 5px; font-size: 0.7rem; color: #c4b5fd; white-space: nowrap;">${icon} ${label}</div>`;
+                                    }
+
+                                    var row1 = [];
+                                    var row2 = [];
+                                    var row3 = [];
+
+                                    (item.dimensions || []).forEach(function(d) {
+                                        if (d === 'markov' || d === 'bayesian') {
+                                            row2.push(d);
+                                        } else if (d === 'big_small' || d === 'odd_even' || d === 'hot_cold' || d === 'tail') {
+                                            row1.push(d);
+                                        } else {
+                                            row3.push(d);
+                                        }
+                                    });
+
+                                    var rowsHtml = '';
+                                    if (row1.length > 0) {
+                                        rowsHtml += `<div style="display: flex; flex-wrap: wrap; gap: 8px;">${row1.map(renderTag).join('')}</div>`;
+                                    }
+                                    if (row2.length > 0) {
+                                        rowsHtml += `<div style="display: flex; flex-wrap: wrap; gap: 8px;">${row2.map(renderTag).join('')}</div>`;
+                                    }
+                                    if (row3.length > 0) {
+                                        rowsHtml += `<div style="display: flex; flex-wrap: wrap; gap: 8px;">${row3.map(renderTag).join('')}</div>`;
+                                    }
+                                    return rowsHtml || `<div style="display: flex; flex-wrap: wrap; gap: 8px;">${renderTag('默认维度')}</div>`;
+                                })()}
                             </div>
                         </div>
                     </div>
@@ -4171,7 +4270,7 @@ function renderAIHistory(items) {
                     <!-- 推理文字区 -->
                     <div class="ai-card-main">
                         <div class="ai-card-analysis">
-                            ${ai.analysis || '无有效推断文字'}
+                            ${formatAnalysisText(ai.analysis || '无有效推断文字')}
                         </div>
                     </div>
                 </div>

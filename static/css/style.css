@@ -889,8 +889,12 @@ body::before {
 
 .batch-draw-balls {
     display: flex;
-    gap: 6px;
+    gap: 8px;
     flex-wrap: wrap;
+    flex: 1;
+    min-width: 0;
+    width: 100%;
+    align-items: center;
 }
 
 .mini-ball {
@@ -1081,10 +1085,12 @@ body::before {
 }
 
 .ai-card-layout {
+    position: relative;
     display: flex;
     flex-direction: row;
     gap: 32px;
-    align-items: flex-start;
+    align-items: stretch;
+    width: 100%;
 }
 
 .ai-card-sidebar {
@@ -1096,8 +1102,13 @@ body::before {
 }
 
 .ai-card-main {
-    flex: 1;
-    min-width: 0;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 272px;
+    right: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 .ai-card-analysis {
@@ -1113,7 +1124,9 @@ body::before {
     box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.3);
     word-break: break-word;
     overflow-wrap: break-word;
-    max-height: 60vh;
+    flex: 1;
+    min-height: 0;
+    height: 100%;
     overflow-y: auto;
 }
 
@@ -1155,13 +1168,18 @@ body::before {
     }
 
     .ai-card-main {
+        position: static;
         width: 100%;
+        height: auto;
     }
 
     .ai-card-analysis {
         padding: 16px;
         font-size: 0.92rem;
         line-height: 1.8;
+        max-height: none;
+        overflow-y: visible;
+        height: auto;
     }
 
     body,

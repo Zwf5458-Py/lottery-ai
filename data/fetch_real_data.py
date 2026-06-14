@@ -440,9 +440,29 @@ def check_data_freshness(lottery_type: str = "macaujc2") -> dict:
     try:
         latest_date = datetime.strptime(latest_date_str, "%Y-%m-%d")
         today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        # 若最新数据日期是昨天或今天，视为已同步
         days_behind = (today - latest_date).days
-        is_fresh = days_behind <= 1
+        # 若最新数据日期是昨天或今天，视为已同步
+        # 针对威力彩，严格按照周一和周四开奖规律来计算上期是否缺失
+        if lottery_type == "weilitsai":
+            # weekday()：0=周一, 1=周二, 2=周三, 3=周四, 4=周五, 5=周六, 6=周日
+            weekday = today.weekday()
+            if weekday == 0:     # 周一：期望上期最晚是上周四（差 4 天）
+                expected_offset = 4
+            elif weekday == 1:   # 周二：期望上期最晚是本周一（差 1 天）
+                expected_offset = 1
+            elif weekday == 2:   # 周三：期望上期最晚是本周一（差 2 天）
+                expected_offset = 2
+            elif weekday == 3:   # 周四：期望上期最晚是本周一（差 3 天）
+                expected_offset = 3
+            elif weekday == 4:   # 周五：期望上期最晚是本周四（差 1 天）
+                expected_offset = 1
+            elif weekday == 5:   # 周六：期望上期最晚是本周四（差 2 天）
+                expected_offset = 2
+            else:                # 周日：期望上期最晚是本周四（差 3 天）
+                expected_offset = 3
+            is_fresh = days_behind <= expected_offset
+        else:
+            is_fresh = days_behind <= 1
     except:
         days_behind = 999
         is_fresh = False

@@ -629,14 +629,9 @@ def api_simulate():
             cache.set(fresh_cache_key, freshness, timeout=300)
 
             if not freshness["is_fresh"]:
-                return jsonify(
-                    {
-                        "success": False,
-                        "error": f"数据不是最新的！最新数据日期: {freshness['latest_date']}（滞后 {freshness['days_behind']} 天）。"
-                        f"请先点击「同步最新」按钮手动同步，确保包含昨天的开奖数据后再进行模拟。",
-                        "data_status": freshness,
-                    }
-                ), 400
+                logger.warning(
+                    f"⚠️ 增量同步尝试后数据仍滞后 {freshness['days_behind']} 天。放行继续执行预测/分析操作..."
+                )
 
         # AI 模式
         if mode == "ai":
@@ -824,6 +819,7 @@ def api_simulate_wheeling():
     count = min(int(data.get('count', 14)), 1000)
     count = max(count, 4)
     dimensions = data.get('dimensions', [])
+    logger.info(f"[Wheeling Sim] Dimensions received: {dimensions}")
 
     from data.fetch_real_data import check_data_freshness, sync_latest
     from modules.points_manager import deduct_points, get_user_points
@@ -858,16 +854,70 @@ def api_simulate_wheeling():
     num_weights = []
     for num in range(1, max_regular + 1):
         w = 1.0
-        if num in weights_config.get('hot_cold_weights', {}):
-            w *= weights_config['hot_cold_weights'][num]
+        
+        # 1. 叠加马尔可夫常规号权重
+        for key in ['zodiac_weights', 'markov_weights']:
+            weights_dict = weights_config.get(key, {})
+            if num in weights_dict:
+                w *= weights_dict[num]
+            elif str(num) in weights_dict:
+                w *= weights_dict[str(num)]
+                
+        # 2. 叠加贝叶斯常规号权重
+        bayes_dict = weights_config.get('bayesian_weights', {})
+        if num in bayes_dict:
+            w *= bayes_dict[num]
+        elif str(num) in bayes_dict:
+            w *= bayes_dict[str(num)]
+            
+        # 3. 叠加 LSTM 常规号权重
+        lstm_dict = weights_config.get('lstm_weights', {})
+        if num in lstm_dict:
+            w *= lstm_dict[num]
+        elif str(num) in lstm_dict:
+            w *= lstm_dict[str(num)]
+            
+        # 4. 叠加路单和值/生肖拐点常规号权重
+        cons_dict = weights_config.get('consecutive_weights', {})
+        if num in cons_dict:
+            w *= cons_dict[num]
+        elif str(num) in cons_dict:
+            w *= cons_dict[str(num)]
+            
+        # 5. 叠加冷热常规号权重 (注意威力彩一区是 hot_cold_weights_z1)
+        hc_weights = {}
+        if max_regular == 38:
+            hc_weights = weights_config.get('hot_cold_weights_z1', {})
+        else:
+            hc_weights = weights_config.get('hot_cold_weights', {})
+            
+        if num in hc_weights:
+            w *= hc_weights[num]
+            
         num_weights.append({'num': num, 'weight': w})
         
-    # Sort by weight descending
-    num_weights.sort(key=lambda x: x['weight'], reverse=True)
-    
-    # Pick top N numbers for the pool
+    # Pick top N numbers for the pool using stratified sampling
     pool_size = matrix_template['pool_size']
-    pool = sorted([x['num'] for x in num_weights[:pool_size]])
+    
+    # 分层抽样：分别从大号和小号中挑选出权重最高的号码，避免单一趋势权重失衡导致大号完全不被分析覆盖
+    bs_split = 19 if lottery_type == 'weilitsai' else 25
+    
+    big_candidates = [x for x in num_weights if x['num'] >= bs_split]
+    small_candidates = [x for x in num_weights if x['num'] < bs_split]
+    
+    # 大小号名额各占一半
+    big_needed = pool_size // 2
+    small_needed = pool_size - big_needed
+    
+    # 按权重降序排序大号和小号候选集
+    big_candidates.sort(key=lambda x: x['weight'], reverse=True)
+    small_candidates.sort(key=lambda x: x['weight'], reverse=True)
+    
+    big_pool = [x['num'] for x in big_candidates[:big_needed]]
+    small_pool = [x['num'] for x in small_candidates[:small_needed]]
+    
+    pool = sorted(big_pool + small_pool)
+    logger.info(f"[Wheeling Sim] Stratified Code Pool (pool_size={pool_size}): {pool} (Big: {big_pool}, Small: {small_pool})")
     
     # Apply matrix to get combinations
     combinations = apply_matrix(matrix_template['matrix'], pool)
@@ -907,7 +957,8 @@ def api_simulate_wheeling():
             odd_count += 1
         else:
             even_count += 1
-        if draw['special_num'] >= 25:
+        sp_bs = 5 if lottery_type == 'weilitsai' else 25
+        if draw['special_num'] >= sp_bs:
             big_count += 1
         else:
             small_count += 1
@@ -925,9 +976,60 @@ def api_simulate_wheeling():
         'wheeling_info': f"启用旋转矩阵：AI 精选 {pool_size} 码池，生成 {matrix_template['tickets']} 注 ({matrix_template['guarantee']})。剩余 {remaining} 注由标准 AI 填补。"
     }
     
+    ai_result = None
+    if data.get('mode') == 'ai':
+        try:
+            from modules.statistics_engine import get_full_analysis, get_zodiac_mapping
+            from modules.ai_engine import analyze_with_ai
+            import logging
+            stats = get_full_analysis(lottery_type)
+            ai_result = analyze_with_ai(stats, lottery_type, dimensions)
+            
+            # 补齐生肖映射
+            if lottery_type != 'weilitsai':
+                z_map_ai = get_zodiac_mapping(lottery_type)
+                if "numbers" in ai_result and ai_result["numbers"]:
+                    ai_result["zodiacs"] = [z_map_ai.get(n, "") for n in ai_result["numbers"]]
+                if "special_num" in ai_result and ai_result["special_num"]:
+                    ai_result["special_zodiac"] = z_map_ai.get(ai_result["special_num"], "")
+            else:
+                ai_result["zodiacs"] = []
+                ai_result["special_zodiac"] = ""
+                
+            # 保存到用户独立的 AI 历史数据库中
+            try:
+                import json
+                from modules.config_manager import load_config
+                from modules.auth import get_user_db_connection
+                cfg = load_config(session.get("user_id"))
+                model_name = cfg.get("ai", {}).get("model", "gemini-2.5-pro")
+                conn = get_user_db_connection(session["user_id"])
+                conn.execute(
+                    """
+                    INSERT INTO ai_analysis_history
+                    (lottery_type, model_name, dimensions, result_json)
+                    VALUES (?, ?, ?, ?)
+                """,
+                    (
+                        lottery_type,
+                        model_name,
+                        json.dumps(dimensions, ensure_ascii=False),
+                        json.dumps(ai_result, ensure_ascii=False),
+                    ),
+                )
+                conn.commit()
+                conn.close()
+            except Exception as db_err:
+                logging.getLogger('app').error(f"旋转矩阵保存 AI 记录失败: {db_err}")
+                
+        except Exception as e:
+            import logging
+            logging.getLogger('app').error(f"旋转矩阵大模型推算失败: {e}")
+
     result = {
         'draws': draws,
-        'summary': summary
+        'summary': summary,
+        'ai_result': ai_result
     }
 
     return jsonify({

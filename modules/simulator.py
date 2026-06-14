@@ -1069,7 +1069,8 @@ def simulate_batch(count: int = 10, lottery_type: str = 'macaujc', dimensions: l
         else:
             even_count += 1
         
-        if draw['special_num'] >= 25:
+        sp_bs = 5 if lottery_type == 'weilitsai' else 25
+        if draw['special_num'] >= sp_bs:
             big_count += 1
         else:
             small_count += 1

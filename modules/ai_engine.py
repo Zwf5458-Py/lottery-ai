@@ -26,12 +26,13 @@ def _resolve_api_config():
     platform = ai_cfg.get('platform', 'local').lower()
     model_name = ai_cfg.get('model', 'gpt-5.4')
     
-    # 优先从该平台专有的 provider 配置中读取 key 和 base_url
+    # 优先从该平台专有的 provider 配置中读取 key、base_url 和 format
     providers = ai_cfg.get('providers', {})
     provider_cfg = providers.get(platform, {}) if isinstance(providers, dict) else {}
     
     api_key = provider_cfg.get('api_key') if isinstance(provider_cfg, dict) else None
     base_url = provider_cfg.get('api_base') if isinstance(provider_cfg, dict) else None
+    api_format = provider_cfg.get('format', '').strip().lower() if isinstance(provider_cfg, dict) else ''
     
     # 如果没读到，则降级使用旧的全局字段 (向前兼容)
     if not api_key:
@@ -39,9 +40,25 @@ def _resolve_api_config():
     if not base_url:
         base_url = ai_cfg.get('base_url') or ai_cfg.get('api_base', 'http://127.0.0.1:8317/v1')
     
-    # 如果平台是 local 或 openai 兼容，优先从环境变量读取本地配置
-    if platform in ('local', 'openai', 'deepseek', 'qwen', 'glm', 'minimax', 'nvidia', 'cpamc'):
-        base_url = os.environ.get('LOCAL_AI_BASE') or os.environ.get('HOST_GATEWAY_URL') or base_url
+    is_openai_compatible = False
+    if api_format == 'openai':
+        is_openai_compatible = True
+    elif api_format == 'google':
+        is_openai_compatible = False
+    else:
+        # 如果没有明确的 format 字段，通过 platform 名字进行猜测
+        if platform in ('local', 'openai', 'deepseek', 'qwen', 'glm', 'minimax', 'nvidia', 'cpamc'):
+            is_openai_compatible = True
+        elif platform == 'google':
+            is_openai_compatible = False
+        else:
+            # 对于其他未知自定义平台，默认为 OpenAI 兼容格式
+            is_openai_compatible = True
+
+    if is_openai_compatible:
+        # 只有在 base_url 为空时，才尝试读取环境变量
+        if not base_url:
+            base_url = os.environ.get('LOCAL_AI_BASE') or os.environ.get('HOST_GATEWAY_URL') or 'http://127.0.0.1:8317/v1'
         if not api_key:
             api_key = os.environ.get('LOCAL_AI_API_KEY', '')
         # 最后保险：如果环境变量仍为空，手动从 .env 文件读取
@@ -70,13 +87,13 @@ def _resolve_api_config():
             base_url = 'https://integrate.api.nvidia.com/v1'
             platform = 'openai' # Nvidia 接口完全兼容 OpenAI SDK
             
-        print(f"🔧 AI 路由: platform={platform}, model={model_name}, base_url={base_url}, key_len={len(api_key)}")
+        print(f"🔧 AI 路由: platform={platform}, model={model_name}, base_url={base_url}, key_len={len(api_key) if api_key else 0}")
         return platform, api_key, model_name, base_url
     else:
         # Google Gemini
         if not api_key:
             api_key = os.environ.get('GEMINI_API_KEY', '')
-        print(f"🔧 AI 路由: platform=google, model={model_name}, key_len={len(api_key)}")
+        print(f"🔧 AI 路由: platform=google, model={model_name}, key_len={len(api_key) if api_key else 0}")
         return 'google', api_key, model_name, None
 
 
@@ -95,12 +112,13 @@ def _resolve_backup_api_config(backup_index: int):
     if not platform or not model_name:
         return None, None, None, None
         
-    # 优先从该平台专有的 provider 配置中读取 key 和 base_url
+    # 优先从该平台专有的 provider 配置中读取 key、base_url 和 format
     providers = ai_cfg.get('providers', {})
     provider_cfg = providers.get(platform, {}) if isinstance(providers, dict) else {}
     
     api_key = provider_cfg.get('api_key') if isinstance(provider_cfg, dict) else None
     base_url = provider_cfg.get('api_base') if isinstance(provider_cfg, dict) else None
+    api_format = provider_cfg.get('format', '').strip().lower() if isinstance(provider_cfg, dict) else ''
     
     # 如果没读到，则降级使用旧的全局字段 (向前兼容)
     if not api_key:
@@ -108,8 +126,25 @@ def _resolve_backup_api_config(backup_index: int):
     if not base_url:
         base_url = ai_cfg.get('base_url') or ai_cfg.get('api_base', 'http://127.0.0.1:8317/v1')
         
-    if platform in ('local', 'openai', 'deepseek', 'qwen', 'glm', 'minimax', 'nvidia', 'cpamc'):
-        base_url = os.environ.get('LOCAL_AI_BASE') or os.environ.get('HOST_GATEWAY_URL') or base_url
+    is_openai_compatible = False
+    if api_format == 'openai':
+        is_openai_compatible = True
+    elif api_format == 'google':
+        is_openai_compatible = False
+    else:
+        # 如果没有明确的 format 字段，通过 platform 名字进行猜测
+        if platform in ('local', 'openai', 'deepseek', 'qwen', 'glm', 'minimax', 'nvidia', 'cpamc'):
+            is_openai_compatible = True
+        elif platform == 'google':
+            is_openai_compatible = False
+        else:
+            # 对于其他未知自定义平台，默认为 OpenAI 兼容格式
+            is_openai_compatible = True
+
+    if is_openai_compatible:
+        # 只有在 base_url 为空时，才尝试读取环境变量
+        if not base_url:
+            base_url = os.environ.get('LOCAL_AI_BASE') or os.environ.get('HOST_GATEWAY_URL') or 'http://127.0.0.1:8317/v1'
         if not api_key:
             api_key = os.environ.get('LOCAL_AI_API_KEY', '')
             
@@ -125,6 +160,48 @@ def _resolve_backup_api_config(backup_index: int):
         return 'google', api_key, model_name, None
 
 
+def _check_same_platform_tip(model_chain: list) -> str:
+    """检查模型链是否都属于同一个平台/自建网关，并返回相应的提示信息"""
+    if not model_chain:
+        return ""
+    platforms = list(set([m['platform'].lower() for m in model_chain if m.get('platform')]))
+    
+    # 提取 base_url 的主机名或域名，用于判断是否为同一个自建网关
+    domains = []
+    for m in model_chain:
+        base = m.get('base_url')
+        if base and isinstance(base, str):
+            from urllib.parse import urlparse
+            try:
+                netloc = urlparse(base).netloc
+                if netloc:
+                    domains.append(netloc)
+            except:
+                pass
+    domains = list(set(domains))
+    
+    is_same = False
+    if len(platforms) <= 1:
+        is_same = True
+    elif len(domains) == 1:
+        is_same = True
+        
+    if is_same:
+        platform_name = platforms[0] if platforms else "当前"
+        if platform_name == 'google':
+            platform_disp = "Google Gemini"
+        elif platform_name == 'openai':
+            platform_disp = "OpenAI"
+        else:
+            platform_disp = platform_name.upper()
+            
+        if domains:
+            platform_disp += f" (网关: {domains[0]})"
+            
+        return f"\n\n【高可用提示】：系统检测到您当前配置的主模型与所有备用模型均使用同一个平台/网关({platform_disp})。如果该平台因网络或代理问题极其不稳定，建议您在“系统设置”中更换为其他稳定的官方公共平台模型（例如直接使用官方 Google Gemini、OpenAI 或 DeepSeek 官方直接接口）以保证服务的绝对稳定性。"
+    return ""
+
+
 def _call_openai_compatible(prompt: str, api_key: str, model_name: str, base_url: str) -> dict:
     """通过 OpenAI 兼容接口调用本地或第三方模型"""
     import requests
@@ -132,6 +209,7 @@ def _call_openai_compatible(prompt: str, api_key: str, model_name: str, base_url
     url = f"{base_url.rstrip('/')}/chat/completions"
     headers = {
         'Content-Type': 'application/json',
+        'Connection': 'close',
     }
     if api_key:
         headers['Authorization'] = f'Bearer {api_key}'
@@ -160,7 +238,14 @@ def _call_openai_compatible(prompt: str, api_key: str, model_name: str, base_url
         try:
             # Nvidia 接口某些模型推理极慢，放宽到 180 秒
             timeout_cfg = 180 if 'integrate.api.nvidia.com' in base_url else 120
-            resp = requests.post(url, json=payload, headers=headers, timeout=timeout_cfg)
+            
+            # 容错容灾：如果之前发生过连接异常，重试时强制直连，防止本地脏代理变量污染私有网关
+            proxies_cfg = None
+            if attempt > 0 and last_err and isinstance(last_err, requests.exceptions.ConnectionError):
+                print(f"⚠️ {model_name} 监测到连接异常，重试时强制启用免代理直连...")
+                proxies_cfg = {"http": None, "https": None}
+                
+            resp = requests.post(url, json=payload, headers=headers, timeout=timeout_cfg, proxies=proxies_cfg)
             resp.raise_for_status()
             data = resp.json()
             content = data['choices'][0]['message']['content']
@@ -375,7 +460,24 @@ def analyze_with_ai(stats_summary: dict, lottery_type: str = 'macaujc', dimensio
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return _fallback_result(f'AI 分析异常 ({type(e).__name__}: {str(e)[:100]})，已降级为传统加权模式')
+        
+        # 安全地获取 model_chain
+        m_chain = locals().get('model_chain', [])
+        if not m_chain:
+            try:
+                p, k, mn, bu = _resolve_api_config()
+                m_chain = [{"name": "主模型", "platform": p, "api_key": k, "model_name": mn, "base_url": bu}]
+                bp1, bk1, bm1, bb1 = _resolve_backup_api_config(1)
+                if bp1 and bm1:
+                    m_chain.append({"name": "备用模型 2", "platform": bp1, "api_key": bk1, "model_name": bm1, "base_url": bb1})
+                bp2, bk2, bm2, bb2 = _resolve_backup_api_config(2)
+                if bp2 and bm2:
+                    m_chain.append({"name": "备用模型 3", "platform": bp2, "api_key": bk2, "model_name": bm2, "base_url": bb2})
+            except:
+                pass
+                
+        tip = _check_same_platform_tip(m_chain)
+        return _fallback_result(f'AI 分析异常 ({type(e).__name__}: {str(e)[:100]}){tip}，已降级为传统加权模式')
 
 
 def analyze_zodiac_with_ai(stats_summary: dict, lottery_type: str = 'macaujc', dimensions: list = None) -> dict:
@@ -460,7 +562,24 @@ def analyze_zodiac_with_ai(stats_summary: dict, lottery_type: str = 'macaujc', d
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return _fallback_zodiac(f'AI 分析异常 ({type(e).__name__}: {str(e)[:100]})')
+        
+        # 安全地获取 model_chain
+        m_chain = locals().get('model_chain', [])
+        if not m_chain:
+            try:
+                p, k, mn, bu = _resolve_api_config()
+                m_chain = [{"name": "主模型", "platform": p, "api_key": k, "model_name": mn, "base_url": bu}]
+                bp1, bk1, bm1, bb1 = _resolve_backup_api_config(1)
+                if bp1 and bm1:
+                    m_chain.append({"name": "备用模型 2", "platform": bp1, "api_key": bk1, "model_name": bm1, "base_url": bb1})
+                bp2, bk2, bm2, bb2 = _resolve_backup_api_config(2)
+                if bp2 and bm2:
+                    m_chain.append({"name": "备用模型 3", "platform": bp2, "api_key": bk2, "model_name": bm2, "base_url": bb2})
+            except:
+                pass
+                
+        tip = _check_same_platform_tip(m_chain)
+        return _fallback_zodiac(f'AI 分析异常 ({type(e).__name__}: {str(e)[:100]}){tip}')
 
 
 def _build_common_dimensions(stats: dict, dimensions: list) -> list:

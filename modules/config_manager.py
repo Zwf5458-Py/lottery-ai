@@ -103,7 +103,16 @@ def save_config(data: dict, user_id=None) -> bool:
 
     # 降级：保存到全局 config.json
     try:
-        # 丢弃遮罩密钥以保留原有的加密密钥
+        # 1. 备份原先 config.json 中各个供应商的加密 api_key
+        current = load_global_config()
+        old_keys = {}
+        old_providers = current.get("ai", {}).get("providers", {})
+        if isinstance(old_providers, dict):
+            for p_name, p_cfg in old_providers.items():
+                if isinstance(p_cfg, dict) and p_cfg.get("api_key"):
+                    old_keys[p_name] = p_cfg["api_key"]
+
+        # 2. 丢弃遮罩密钥以保留原有的加密密钥
         if "ai" in data:
             ai_data = data["ai"]
             if ai_data.get("api_key") and "****" in ai_data["api_key"]:
@@ -113,8 +122,18 @@ def save_config(data: dict, user_id=None) -> bool:
                     if isinstance(p_cfg, dict) and p_cfg.get("api_key") and "****" in p_cfg["api_key"]:
                         del p_cfg["api_key"]
 
-        current = load_config()
+        # 3. 深度合并
         merged = _deep_merge(current, data)
+
+        # 4. 精细重构合并后的 providers：以 data 的 providers 结构为准（支持删除和覆盖）
+        if "ai" in data and "providers" in data["ai"]:
+            merged_providers = copy.deepcopy(data["ai"]["providers"])
+            for p_name, p_cfg in merged_providers.items():
+                if isinstance(p_cfg, dict):
+                    if "api_key" not in p_cfg or not p_cfg["api_key"]:
+                        p_cfg["api_key"] = old_keys.get(p_name, "")
+            merged["ai"]["providers"] = merged_providers
+
         # 加密 API Key
         if "ai" in merged and merged["ai"].get("api_key"):
             if not is_encrypted(merged["ai"]["api_key"]):
@@ -125,6 +144,7 @@ def save_config(data: dict, user_id=None) -> bool:
                 if isinstance(p_cfg, dict) and p_cfg.get("api_key"):
                     if not is_encrypted(p_cfg["api_key"]):
                         p_cfg["api_key"] = encrypt_api_key(p_cfg["api_key"])
+
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(merged, f, indent=2, ensure_ascii=False)
         return True
@@ -275,7 +295,16 @@ def _save_user_config(data: dict, user_id: int) -> bool:
     try:
         from modules.auth import get_user_db_connection
 
-        # 丢弃遮罩密钥以保留原有的加密密钥
+        # 1. 备份原先数据库中各个供应商的加密 api_key
+        current = _load_user_config(user_id)
+        old_keys = {}
+        old_providers = current.get("ai", {}).get("providers", {})
+        if isinstance(old_providers, dict):
+            for p_name, p_cfg in old_providers.items():
+                if isinstance(p_cfg, dict) and p_cfg.get("api_key"):
+                    old_keys[p_name] = p_cfg["api_key"]
+
+        # 2. 丢弃遮罩密钥以保留原有的加密密钥
         if "ai" in data:
             ai_data = data["ai"]
             if ai_data.get("api_key") and "****" in ai_data["api_key"]:
@@ -285,8 +314,17 @@ def _save_user_config(data: dict, user_id: int) -> bool:
                     if isinstance(p_cfg, dict) and p_cfg.get("api_key") and "****" in p_cfg["api_key"]:
                         del p_cfg["api_key"]
 
-        current = _load_user_config(user_id)
+        # 3. 深度合并
         merged = _deep_merge(current, data)
+
+        # 4. 精细重构合并后的 providers：以 data 的 providers 结构为准（支持删除和覆盖）
+        if "ai" in data and "providers" in data["ai"]:
+            merged_providers = copy.deepcopy(data["ai"]["providers"])
+            for p_name, p_cfg in merged_providers.items():
+                if isinstance(p_cfg, dict):
+                    if "api_key" not in p_cfg or not p_cfg["api_key"]:
+                        p_cfg["api_key"] = old_keys.get(p_name, "")
+            merged["ai"]["providers"] = merged_providers
 
         # 加密 API Key
         if "ai" in merged and merged["ai"].get("api_key"):
