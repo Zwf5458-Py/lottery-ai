@@ -1088,15 +1088,16 @@ def api_save_settings():
         user_id = session["user_id"]
         role = session.get("role", "trial")
 
-        # 普通用户允许设置 AI 平台与模型，但不允许改 API Key/API Base/自定义平台与模型
+        # 普通用户允许设置 AI 平台与模型，包括自定义供应商及其配置
         if "ai" in data and role not in ("vip", "admin"):
             ai_in = data.get("ai", {}) if isinstance(data.get("ai"), dict) else {}
             safe_ai = {}
-            if "platform" in ai_in:
-                safe_ai["platform"] = ai_in.get("platform")
-            if "model" in ai_in:
-                safe_ai["model"] = ai_in.get("model")
-            for key in ["backup_platform_1", "backup_model_1", "backup_platform_2", "backup_model_2"]:
+            # 放行主模型配置和备用模型配置
+            for key in ["platform", "model", "backup_platform_1", "backup_model_1", "backup_platform_2", "backup_model_2"]:
+                if key in ai_in:
+                    safe_ai[key] = ai_in.get(key)
+            # 放行自定义平台配置及其模型列表
+            for key in ["providers", "custom_platforms", "custom_platform_models"]:
                 if key in ai_in:
                     safe_ai[key] = ai_in.get(key)
             data["ai"] = safe_ai
