@@ -815,6 +815,8 @@ def api_simulate_wheeling():
     智能模拟开奖 API (旋转矩阵模式)
     """
     data = request.json
+    from modules.logger import get_logger
+    logger = get_logger()
     lottery_type = data.get('type', 'macaujc')
     count = min(int(data.get('count', 14)), 1000)
     count = max(count, 4)
