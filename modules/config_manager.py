@@ -48,6 +48,17 @@ DEFAULT_CONFIG = {
         "lstm": 100,
         "ai_raw_data": 300,
     },
+    "chart_periods_weilitsai": {
+        "zodiac_trend": 200,
+        "odd_even": 50,
+        "big_small": 50,
+        "markov": 0,
+        "hot_cold": 50,
+        "tail": 100,
+        "bayesian": 200,
+        "lstm": 100,
+        "ai_raw_data": 300,
+    },
     "system": {
         "signup_bonus_points": 20,
         "ai_sim_cost": 5,
@@ -195,19 +206,31 @@ def get_chart_periods(user_id=None, lottery_type: str = 'macaujc') -> dict:
     """获取各图表统计期数，根据彩种类型解耦"""
     branch = 'weilitsai' if lottery_type == 'weilitsai' else 'macaujc'
     cfg = load_config(user_id)
+    
+    default_branch = DEFAULT_CONFIG["chart_periods_weilitsai"] if branch == 'weilitsai' else DEFAULT_CONFIG["chart_periods"]
     periods = cfg.get("chart_periods", DEFAULT_CONFIG["chart_periods"])
     
     # 检查是否已经是隔离字典
     if isinstance(periods, dict) and ('macaujc' in periods or 'weilitsai' in periods):
         branch_cfg = periods.get(branch)
         if isinstance(branch_cfg, dict):
-            return branch_cfg
+            return {**default_branch, **branch_cfg}
             
     # 向下兼容平铺字典
     import copy
-    default_flat = DEFAULT_CONFIG["chart_periods"]
-    current_flat = periods if isinstance(periods, dict) else default_flat
-    return copy.deepcopy(current_flat)
+    if branch == 'weilitsai':
+        if not isinstance(periods, dict):
+            return copy.deepcopy(default_branch)
+        if periods == DEFAULT_CONFIG["chart_periods"]:
+            return copy.deepcopy(default_branch)
+        merged = copy.deepcopy(default_branch)
+        for k, v in periods.items():
+            if k in merged and v != DEFAULT_CONFIG["chart_periods"].get(k):
+                merged[k] = v
+        return merged
+        
+    current_flat = periods if isinstance(periods, dict) else default_branch
+    return {**default_branch, **current_flat}
 
 
 def get_system_config() -> dict:
