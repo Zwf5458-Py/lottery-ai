@@ -3055,6 +3055,7 @@ let settingsPlatformConfigs = {};
 let settingsLastActivePlatform = '';
 let settingsIsNewProvider = false; // 用来标记是新建还是编辑
 let settingsEditingProviderName = ''; // 用来标记当前编辑的供应商原名称
+let settingsFetchedModelsList = []; // 用来暂存当前拉取到或已有的模型列表，支持下拉选择
 
 function initSettingsPanel() {
     const modal = document.getElementById('settings-modal');
@@ -3191,6 +3192,7 @@ function openProviderEditView(platform, isNew) {
 
     if (isNew) {
         settingsEditingProviderName = '';
+        settingsFetchedModelsList = [];
         if (titleEl) titleEl.textContent = '新建供应商';
         if (nameEl) {
             nameEl.value = '';
@@ -3212,6 +3214,10 @@ function openProviderEditView(platform, isNew) {
         const prov = settingsPlatformConfigs[platform] || {
             api_base: '', api_key: '', api_key_masked: '', remark: '', url: '', format: 'openai', models: []
         };
+        // 预加载已存模型和内置默认模型到下拉菜单缓存中
+        const existingModelIds = (prov.models || []).map(m => m.id).filter(Boolean);
+        const defaultModelIds = DEFAULT_PLATFORM_MODELS[platform] || [];
+        settingsFetchedModelsList = Array.from(new Set([...existingModelIds, ...defaultModelIds]));
 
         if (nameEl) {
             nameEl.value = platform;
@@ -3280,7 +3286,14 @@ function addModelRow(modelId = '', displayName = '') {
     row.className = 'provider-model-row';
     row.innerHTML = `
         <span style="color: #64748b; font-size: 0.8rem; user-select: none; width: 12px; text-align: center;">&gt;</span>
-        <input type="text" class="model-id-input" placeholder="模型 ID，如 gpt-4o" style="flex: 1.5; font-size: 0.8rem; padding: 6px 10px;" value="${modelId}">
+        <div class="model-id-wrapper" style="position: relative; flex: 1.5; display: flex; align-items: center; gap: 4px;">
+            <input type="text" class="model-id-input" placeholder="模型 ID，如 gpt-4o" style="width: 100%; font-size: 0.8rem; padding: 6px 10px;" value="${modelId}">
+            <button type="button" class="model-dropdown-toggle-btn" style="padding: 6px 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; color: #9ca3af; cursor: pointer; display: flex; align-items: center; justify-content: center; height: 30px; width: 30px; transition: all 0.2s;" title="选择模型">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+            </button>
+        </div>
         <input type="text" class="model-display-input" placeholder="显示名称（可选）" style="flex: 1; font-size: 0.8rem; padding: 6px 10px;" value="${displayName}">
         <button type="button" class="btn-delete-model-row" title="删除模型">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -3297,6 +3310,91 @@ function addModelRow(modelId = '', displayName = '') {
     if (delBtn) {
         delBtn.addEventListener('click', () => {
             row.remove();
+        });
+    }
+
+    // 绑定下拉选择交互
+    const toggleBtn = row.querySelector('.model-dropdown-toggle-btn');
+    const idInput = row.querySelector('.model-id-input');
+    const wrapper = row.querySelector('.model-id-wrapper');
+
+    if (toggleBtn && idInput && wrapper) {
+        toggleBtn.addEventListener('mouseenter', () => {
+            toggleBtn.style.background = 'rgba(255,255,255,0.08)';
+            toggleBtn.style.color = '#f3f4f6';
+            toggleBtn.style.borderColor = 'rgba(255,255,255,0.15)';
+        });
+        toggleBtn.addEventListener('mouseleave', () => {
+            toggleBtn.style.background = 'rgba(255,255,255,0.04)';
+            toggleBtn.style.color = '#9ca3af';
+            toggleBtn.style.borderColor = 'rgba(255,255,255,0.08)';
+        });
+
+        toggleBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+
+            // 先关闭所有的下拉框以防重叠
+            document.querySelectorAll('.model-dropdown-list').forEach(el => el.remove());
+
+            if (!settingsFetchedModelsList || settingsFetchedModelsList.length === 0) {
+                showSettingsToast('未拉取到模型列表，请先点击右上角“获取模型列表”', 'info');
+                return;
+            }
+
+            // 创建绝对定位列表
+            const list = document.createElement('div');
+            list.className = 'model-dropdown-list';
+            list.style.cssText = [
+                'position:absolute',
+                'top:100%',
+                'left:0',
+                'right:0',
+                'background:#1e293b',
+                'border:1px solid rgba(255,255,255,0.12)',
+                'border-radius:8px',
+                'z-index:9999',
+                'max-height:160px',
+                'overflow-y:auto',
+                'margin-top:4px',
+                'box-shadow:0 10px 25px rgba(0,0,0,0.5)',
+                'padding:4px 0'
+            ].join(';');
+
+            settingsFetchedModelsList.forEach(m => {
+                const item = document.createElement('div');
+                item.className = 'model-dropdown-item';
+                item.style.cssText = [
+                    'padding:8px 12px',
+                    'font-size:0.8rem',
+                    'color:#f3f4f6',
+                    'cursor:pointer',
+                    'transition:background 0.15s'
+                ].join(';');
+                item.textContent = m;
+
+                item.addEventListener('mouseenter', () => {
+                    item.style.background = 'rgba(255,255,255,0.08)';
+                });
+                item.addEventListener('mouseleave', () => {
+                    item.style.background = 'transparent';
+                });
+
+                item.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    idInput.value = m;
+                    list.remove();
+                });
+
+                list.appendChild(item);
+            });
+
+            wrapper.appendChild(list);
+
+            const closeList = () => {
+                list.remove();
+                document.removeEventListener('click', closeList);
+            };
+            document.addEventListener('click', closeList);
         });
     }
 
@@ -3349,25 +3447,16 @@ async function fetchProviderModels() {
             return;
         }
 
-        // 读取当前页面中已有的模型 ID
+        // 暂存拉取到的模型列表，提供下拉点选
+        settingsFetchedModelsList = models;
+
+        // 如果目前没有任何模型行，自动添加一个空行作为方便选择的入口
         const container = document.getElementById('provider-models-list-container');
-        const existingIds = new Set();
-        if (container) {
-            container.querySelectorAll('.model-id-input').forEach(input => {
-                const val = normalizeModelName(input.value);
-                if (val) existingIds.add(val);
-            });
+        if (container && container.querySelectorAll('.provider-model-row').length === 0) {
+            addModelRow('', '');
         }
 
-        let addedCount = 0;
-        models.forEach(m => {
-            if (!existingIds.has(m)) {
-                addModelRow(m, '');
-                addedCount++;
-            }
-        });
-
-        showSettingsToast(`成功拉取，已自动追加 ${addedCount} 个新模型`, 'success');
+        showSettingsToast(`成功拉取 ${models.length} 个模型，可点击模型 ID 右侧的下拉小箭头进行选择`, 'success');
     } catch (e) {
         console.error('拉取模型失败:', e);
         showSettingsToast('拉取模型出现网络异常', 'error');
