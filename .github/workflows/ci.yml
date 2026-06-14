@@ -10,6 +10,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ['3.10', '3.11', '3.12']
 
@@ -39,6 +40,10 @@ jobs:
         python -m py_compile app.py
         python -m py_compile modules/*.py
         python -m py_compile blueprints/*.py
+
+    - name: Generate test database
+      run: |
+        python data/generate_test_data.py
 
     - name: Run tests with pytest
       run: |

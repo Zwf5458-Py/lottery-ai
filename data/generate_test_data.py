@@ -76,9 +76,15 @@ def generate_test_data(lottery_type="macaujc2", start_date="2026-01-01", num_day
         draw_date = current_date.strftime("%Y-%m-%d")
         draw_number = current_date.strftime("%Y%m%d")
 
-        # 随机生成7个不重复的号码 (1-49)
-        numbers = random.sample(range(1, 50), 7)
-        num1, num2, num3, num4, num5, num6, special_num = numbers
+        # 随机生成符合彩种规则的号码
+        if lottery_type == 'weilitsai':
+            zone1_nums = sorted(random.sample(range(1, 39), 6))
+            special_num = random.randint(1, 8)
+            num1, num2, num3, num4, num5, num6 = zone1_nums
+            numbers = zone1_nums + [special_num]
+        else:
+            numbers = random.sample(range(1, 50), 7)
+            num1, num2, num3, num4, num5, num6, special_num = numbers
 
         # 根据号码获取生肖
         zodiac_parts = []
@@ -135,9 +141,10 @@ def ensure_test_data_exists():
     """确保测试数据存在"""
     print("🔍 检查测试数据...")
 
-    # 为两种彩票类型生成测试数据
+    # 为所有彩票类型生成测试数据
     generate_test_data("macaujc", "2026-01-01", 30)
     generate_test_data("macaujc2", "2026-01-01", 30)
+    generate_test_data("weilitsai", "2026-01-01", 30)
 
     print("✅ 测试数据已就绪")
 
