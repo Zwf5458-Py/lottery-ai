@@ -1853,6 +1853,8 @@ body::before {
 .settings-body {
     padding: 16px 20px;
     overflow-y: auto;
+    flex: 1;
+    min-height: 0;
 }
 
 .settings-section {

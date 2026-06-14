@@ -3054,6 +3054,7 @@ let settingsCustomPlatformModels = {}; // 仅作兼容保留
 let settingsPlatformConfigs = {};
 let settingsLastActivePlatform = '';
 let settingsIsNewProvider = false; // 用来标记是新建还是编辑
+let settingsEditingProviderName = ''; // 用来标记当前编辑的供应商原名称
 
 function initSettingsPanel() {
     const modal = document.getElementById('settings-modal');
@@ -3189,6 +3190,7 @@ function openProviderEditView(platform, isNew) {
     if (toggleBtn) toggleBtn.textContent = '👁';
 
     if (isNew) {
+        settingsEditingProviderName = '';
         if (titleEl) titleEl.textContent = '新建供应商';
         if (nameEl) {
             nameEl.value = '';
@@ -3204,6 +3206,7 @@ function openProviderEditView(platform, isNew) {
         if (modelsContainer) modelsContainer.innerHTML = '';
         updateGetApiKeyLink('openai');
     } else {
+        settingsEditingProviderName = platform;
         if (titleEl) titleEl.textContent = '编辑供应商';
         
         const prov = settingsPlatformConfigs[platform] || {
@@ -3212,8 +3215,8 @@ function openProviderEditView(platform, isNew) {
 
         if (nameEl) {
             nameEl.value = platform;
-            nameEl.disabled = true; // 编辑时不允许改主键
-            nameEl.readOnly = true;
+            nameEl.disabled = false; // 允许修改供应商名称
+            nameEl.readOnly = false;
         }
         if (remarkEl) remarkEl.value = prov.remark || '';
         if (urlEl) urlEl.value = prov.url || '';
@@ -3323,6 +3326,9 @@ async function fetchProviderModels() {
 
         const res = await apiFetch('/api/settings/fetch_models', {
             method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
             body: JSON.stringify({
                 platform_name: name,
                 api_base: apiBase,
@@ -3405,6 +3411,18 @@ function saveCurrentProvider() {
         });
     }
 
+    // 如果修改了供应商名称
+    if (settingsEditingProviderName && settingsEditingProviderName !== name) {
+        if (Object.prototype.hasOwnProperty.call(DEFAULT_PLATFORM_MODELS, name)) {
+            showSettingsToast('供应商名称与内置平台名称冲突，请换一个名称', 'warn');
+            return;
+        }
+        // 删除旧配置
+        delete settingsPlatformConfigs[settingsEditingProviderName];
+        // 更新自定义列表中的名称
+        settingsCustomPlatforms = settingsCustomPlatforms.map(p => p === settingsEditingProviderName ? name : p);
+    }
+
     // 更新或创建内存配置
     const oldCfg = settingsPlatformConfigs[name] || {};
     settingsPlatformConfigs[name] = {
@@ -3431,22 +3449,23 @@ function saveCurrentProvider() {
 // 删除当前编辑的自定义供应商
 function deleteCurrentProvider() {
     const name = normalizePlatformName(document.getElementById('edit-provider-name')?.value || '');
-    if (!name) return;
+    const targetToDelete = settingsEditingProviderName || name;
+    if (!targetToDelete) return;
 
-    if (Object.prototype.hasOwnProperty.call(DEFAULT_PLATFORM_MODELS, name)) {
+    if (Object.prototype.hasOwnProperty.call(DEFAULT_PLATFORM_MODELS, targetToDelete)) {
         showSettingsToast('内置平台不能删除', 'warn');
         return;
     }
 
-    if (confirm(`确定要删除供应商平台 ${name} 及其下的所有模型配置吗？`)) {
-        settingsCustomPlatforms = settingsCustomPlatforms.filter(p => p !== name);
-        delete settingsPlatformConfigs[name];
+    if (confirm(`确定要删除供应商平台 ${targetToDelete} 及其下的所有模型配置吗？`)) {
+        settingsCustomPlatforms = settingsCustomPlatforms.filter(p => p !== targetToDelete);
+        delete settingsPlatformConfigs[targetToDelete];
 
         const next = getAllPlatforms()[0] || 'google';
         renderPlatformOptions(next);
         syncModelOptions();
         showSettingsSubView('main');
-        showSettingsToast(`已删除供应商 ${name}`, 'info');
+        showSettingsToast(`已删除供应商 ${targetToDelete}`, 'info');
     }
 }
 
