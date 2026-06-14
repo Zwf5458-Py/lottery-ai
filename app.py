@@ -1189,7 +1189,7 @@ def api_fetch_models():
         api_format = data.get("format", "openai").strip()
 
         # 处理掩码还原
-        if api_key and "****" in api_key:
+        if api_key and "*" in api_key:
             ai_cfg = get_ai_config(session["user_id"])
             providers = ai_cfg.get("providers", {})
             p_cfg = providers.get(platform_name, {}) if isinstance(providers, dict) else {}

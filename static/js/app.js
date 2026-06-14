@@ -3193,6 +3193,7 @@ function openProviderEditView(platform, isNew) {
         if (nameEl) {
             nameEl.value = '';
             nameEl.disabled = false;
+            nameEl.readOnly = false;
         }
         if (remarkEl) remarkEl.value = '';
         if (urlEl) urlEl.value = '';
@@ -3212,6 +3213,7 @@ function openProviderEditView(platform, isNew) {
         if (nameEl) {
             nameEl.value = platform;
             nameEl.disabled = true; // 编辑时不允许改主键
+            nameEl.readOnly = true;
         }
         if (remarkEl) remarkEl.value = prov.remark || '';
         if (urlEl) urlEl.value = prov.url || '';
