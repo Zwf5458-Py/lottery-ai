@@ -11,6 +11,6 @@ threads = 4
 timeout = 120
 
 # 日志配置
-accesslog = "logs/access.log"
-errorlog = "logs/error.log"
+accesslog = "-"
+errorlog = "-"
 loglevel = "info"
