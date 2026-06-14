@@ -1096,6 +1096,9 @@ def api_save_settings():
                 safe_ai["platform"] = ai_in.get("platform")
             if "model" in ai_in:
                 safe_ai["model"] = ai_in.get("model")
+            for key in ["backup_platform_1", "backup_model_1", "backup_platform_2", "backup_model_2"]:
+                if key in ai_in:
+                    safe_ai[key] = ai_in.get(key)
             data["ai"] = safe_ai
 
         lottery_type = request.args.get("type", "macaujc")

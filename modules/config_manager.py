@@ -25,6 +25,10 @@ DEFAULT_CONFIG = {
         "platform": "local",
         "model": "gpt-5.4",
         "api_key": "",
+        "backup_platform_1": "",
+        "backup_model_1": "",
+        "backup_platform_2": "",
+        "backup_model_2": "",
         "providers": {
             "google": {"api_base": "", "api_key": ""},
             "openai": {"api_base": "https://api.openai.com/v1", "api_key": ""},

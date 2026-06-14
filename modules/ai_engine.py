@@ -80,6 +80,51 @@ def _resolve_api_config():
         return 'google', api_key, model_name, None
 
 
+def _resolve_backup_api_config(backup_index: int):
+    """解析备用平台配置（backup_index 为 1 或 2），返回 (platform, api_key, model_name, base_url)"""
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(override=False)
+    except ImportError:
+        pass
+    
+    ai_cfg = _get_ai_config()
+    platform = ai_cfg.get(f'backup_platform_{backup_index}', '').strip().lower()
+    model_name = ai_cfg.get(f'backup_model_{backup_index}', '').strip()
+    
+    if not platform or not model_name:
+        return None, None, None, None
+        
+    # 优先从该平台专有的 provider 配置中读取 key 和 base_url
+    providers = ai_cfg.get('providers', {})
+    provider_cfg = providers.get(platform, {}) if isinstance(providers, dict) else {}
+    
+    api_key = provider_cfg.get('api_key') if isinstance(provider_cfg, dict) else None
+    base_url = provider_cfg.get('api_base') if isinstance(provider_cfg, dict) else None
+    
+    # 如果没读到，则降级使用旧的全局字段 (向前兼容)
+    if not api_key:
+        api_key = ai_cfg.get('api_key', '')
+    if not base_url:
+        base_url = ai_cfg.get('base_url') or ai_cfg.get('api_base', 'http://127.0.0.1:8317/v1')
+        
+    if platform in ('local', 'openai', 'deepseek', 'qwen', 'glm', 'minimax', 'nvidia', 'cpamc'):
+        base_url = os.environ.get('LOCAL_AI_BASE') or os.environ.get('HOST_GATEWAY_URL') or base_url
+        if not api_key:
+            api_key = os.environ.get('LOCAL_AI_API_KEY', '')
+            
+        if platform == 'nvidia' or (api_key and api_key.startswith('nvapi-')):
+            base_url = 'https://integrate.api.nvidia.com/v1'
+            platform = 'openai'
+            
+        return platform, api_key, model_name, base_url
+    else:
+        # Google Gemini
+        if not api_key:
+            api_key = os.environ.get('GEMINI_API_KEY', '')
+        return 'google', api_key, model_name, None
+
+
 def _call_openai_compatible(prompt: str, api_key: str, model_name: str, base_url: str) -> dict:
     """通过 OpenAI 兼容接口调用本地或第三方模型"""
     import requests
@@ -242,12 +287,7 @@ def analyze_with_ai(stats_summary: dict, lottery_type: str = 'macaujc', dimensio
         dimensions = ['big_small', 'odd_even', 'hot_cold', 'tail', 'zodiac']
     
     try:
-        platform, api_key, model_name, base_url = _resolve_api_config()
-        
-        if not api_key and platform == 'google':
-            raise ValueError("未配置 Gemini API Key，请在设置面板中填写")
-            
-        # 先由底层数学引擎进行一次推算，获取硬性结果
+        # 1. 先由底层数学引擎进行一次推算，获取硬性结果
         from modules.simulator import simulate_single
         sys_res = simulate_single(lottery_type, dimensions)
         pre_sel_nums = sorted(sys_res.get('numbers', []))
@@ -256,11 +296,57 @@ def analyze_with_ai(stats_summary: dict, lottery_type: str = 'macaujc', dimensio
         
         prompt = _build_analysis_prompt(stats_summary, lottery_type, dimensions, pre_sel_nums, pre_sel_special, system_weights)
         
-        # 根据平台选择调用方式
-        if platform == 'google':
-            result = _call_gemini(prompt, api_key, model_name, stats_summary, lottery_type, dimensions)
-        else:
-            result = _call_openai_compatible(prompt, api_key, model_name, base_url)
+        # 2. 解析主模型配置
+        platform, api_key, model_name, base_url = _resolve_api_config()
+        
+        # 3. 构造大模型调用链
+        model_chain = [
+            {"name": "主模型", "platform": platform, "api_key": api_key, "model_name": model_name, "base_url": base_url}
+        ]
+        
+        # 备用模型 1 (对应备用模型 2)
+        bp1, bk1, bm1, bb1 = _resolve_backup_api_config(1)
+        if bp1 and bm1:
+            model_chain.append({"name": "备用模型 2", "platform": bp1, "api_key": bk1, "model_name": bm1, "base_url": bb1})
+            
+        # 备用模型 2 (对应备用模型 3)
+        bp2, bk2, bm2, bb2 = _resolve_backup_api_config(2)
+        if bp2 and bm2:
+            model_chain.append({"name": "备用模型 3", "platform": bp2, "api_key": bk2, "model_name": bm2, "base_url": bb2})
+            
+        result = None
+        last_exception = None
+        called_model_label = "主模型"
+        called_model_name = model_name
+        
+        for m_info in model_chain:
+            try:
+                # 针对本地或第三方的调试打印
+                key_len = len(m_info['api_key']) if m_info['api_key'] else 0
+                print(f"🤖 正在尝试通过 {m_info['name']} ({m_info['model_name']} @ {m_info['platform']}, key_len={key_len}) 进行预测...")
+                
+                if not m_info['api_key'] and m_info['platform'] == 'google':
+                    raise ValueError("未配置 Gemini API Key，请在设置面板中填写")
+                
+                if m_info['platform'] == 'google':
+                    result = _call_gemini(prompt, m_info['api_key'], m_info['model_name'], stats_summary, lottery_type, dimensions)
+                else:
+                    result = _call_openai_compatible(prompt, m_info['api_key'], m_info['model_name'], m_info['base_url'])
+                
+                if result and result.get('analysis'):
+                    called_model_label = m_info['name']
+                    called_model_name = m_info['model_name']
+                    break
+            except Exception as e:
+                print(f"❌ {m_info['name']} ({m_info['model_name']}) 尝试调用失败: {e}")
+                last_exception = e
+                continue
+                
+        if not result:
+            if last_exception:
+                raise last_exception
+            else:
+                raise ValueError("未配置可用模型或所有配置模型尝试均失败")
         
         # ====== 无视AI瞎猜，强制返回系统底层的推算号码 ======
         numbers = sorted(pre_sel_nums)
@@ -274,11 +360,15 @@ def analyze_with_ai(stats_summary: dict, lottery_type: str = 'macaujc', dimensio
                     numbers.append(i)
                     seen.add(i)
         
+        analysis_text = result.get('analysis', 'AI 分析完成')
+        if called_model_label != "主模型":
+            analysis_text = f"【系统提示：由于主模型服务响应失败，系统已自动启用 {called_model_label} ({called_model_name}) 完成此次预测。】\n\n" + analysis_text
+            
         return {
             'success': True,
             'numbers': sorted(numbers[:6]),
             'special_num': special,
-            'analysis': result.get('analysis', 'AI 分析完成'),
+            'analysis': analysis_text,
             'confidence': result.get('confidence', '高')
         }
         
@@ -297,29 +387,73 @@ def analyze_zodiac_with_ai(stats_summary: dict, lottery_type: str = 'macaujc', d
         dimensions = ['markov', 'consecutive', 'bayesian', 'lstm']
     
     try:
-        platform, api_key, model_name, base_url = _resolve_api_config()
-        
-        if not api_key and platform == 'google':
-            raise ValueError("未配置 Gemini API Key，请在设置面板中填写")
-        
-        # 构建生肖专属 Prompt
+        # 1. 构建生肖专属 Prompt
         prompt = _build_zodiac_prompt(stats_summary, lottery_type, dimensions)
         
-        # 根据平台选择调用方式
-        if platform == 'google':
-            result = _call_gemini(prompt, api_key, model_name, stats_summary, lottery_type, dimensions)
-        else:
-            result = _call_openai_compatible(prompt, api_key, model_name, base_url)
+        # 2. 解析主模型配置
+        platform, api_key, model_name, base_url = _resolve_api_config()
+        
+        # 3. 构造大模型调用链
+        model_chain = [
+            {"name": "主模型", "platform": platform, "api_key": api_key, "model_name": model_name, "base_url": base_url}
+        ]
+        
+        # 备用模型 1 (对应备用模型 2)
+        bp1, bk1, bm1, bb1 = _resolve_backup_api_config(1)
+        if bp1 and bm1:
+            model_chain.append({"name": "备用模型 2", "platform": bp1, "api_key": bk1, "model_name": bm1, "base_url": bb1})
+            
+        # 备用模型 2 (对应备用模型 3)
+        bp2, bk2, bm2, bb2 = _resolve_backup_api_config(2)
+        if bp2 and bm2:
+            model_chain.append({"name": "备用模型 3", "platform": bp2, "api_key": bk2, "model_name": bm2, "base_url": bb2})
+            
+        result = None
+        last_exception = None
+        called_model_label = "主模型"
+        called_model_name = model_name
+        
+        for m_info in model_chain:
+            try:
+                key_len = len(m_info['api_key']) if m_info['api_key'] else 0
+                print(f"🤖 正在尝试通过 {m_info['name']} 生肖推算 ({m_info['model_name']} @ {m_info['platform']}, key_len={key_len})...")
+                
+                if not m_info['api_key'] and m_info['platform'] == 'google':
+                    raise ValueError("未配置 Gemini API Key，请在设置面板中填写")
+                
+                if m_info['platform'] == 'google':
+                    result = _call_gemini(prompt, m_info['api_key'], m_info['model_name'], stats_summary, lottery_type, dimensions)
+                else:
+                    result = _call_openai_compatible(prompt, m_info['api_key'], m_info['model_name'], m_info['base_url'])
+                
+                if result and (result.get('zodiac_predictions') or result.get('analysis')):
+                    called_model_label = m_info['name']
+                    called_model_name = m_info['model_name']
+                    break
+            except Exception as e:
+                print(f"❌ {m_info['name']} 生肖推算 ({m_info['model_name']}) 尝试调用失败: {e}")
+                last_exception = e
+                continue
+                
+        if not result:
+            if last_exception:
+                raise last_exception
+            else:
+                raise ValueError("未配置可用模型或所有配置模型尝试均失败")
         
         # 校验生肖有效性
         valid_zodiacs = ['鼠','牛','虎','兔','龙','蛇','马','羊','猴','鸡','狗','猪']
         predictions = result.get('zodiac_predictions', [])
         valid_predictions = [p for p in predictions if p.get('zodiac') in valid_zodiacs]
         
+        analysis_text = result.get('analysis', 'AI 生肖推算完成')
+        if called_model_label != "主模型":
+            analysis_text = f"【系统提示：由于主模型服务响应失败，系统已自动启用 {called_model_label} ({called_model_name}) 完成此次生肖推算。】\n\n" + analysis_text
+            
         return {
             'success': True,
             'zodiac_predictions': valid_predictions[:5],
-            'analysis': result.get('analysis', 'AI 生肖推算完成'),
+            'analysis': analysis_text,
             'confidence': result.get('confidence', '中等')
         }
         

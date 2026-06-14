@@ -3102,6 +3102,20 @@ function initSettingsPanel() {
         });
     }
 
+    // 备用平台切换时联动模型下拉
+    const backupPlatform1El = document.getElementById('set-backup-platform-1');
+    if (backupPlatform1El) {
+        backupPlatform1El.addEventListener('change', () => {
+            syncBackupModelOptions(1);
+        });
+    }
+    const backupPlatform2El = document.getElementById('set-backup-platform-2');
+    if (backupPlatform2El) {
+        backupPlatform2El.addEventListener('change', () => {
+            syncBackupModelOptions(2);
+        });
+    }
+
     // --- 供应商编辑相关事件绑定 ---
     
     // 打开编辑当前平台
@@ -3634,6 +3648,67 @@ function syncModelOptions(selectedModel = '') {
     }
 }
 
+function renderBackupPlatformOptions(index, selectedPlatform = '') {
+    const platformEl = document.getElementById(`set-backup-platform-${index}`);
+    if (!platformEl) return;
+
+    const platforms = getAllPlatforms();
+    platformEl.innerHTML = '<option value="">未启用</option>' + platforms
+        .map((p) => `<option value="${p}">${DEFAULT_PLATFORM_LABELS[p] || p}</option>`)
+        .join('');
+
+    const target = normalizePlatformName(selectedPlatform);
+    if (target && !platforms.includes(target)) {
+        platformEl.insertAdjacentHTML('beforeend', `<option value="${target}">${target}</option>`);
+    }
+    platformEl.value = target || '';
+}
+
+function syncBackupModelOptions(index, selectedModel = '') {
+    const platformEl = document.getElementById(`set-backup-platform-${index}`);
+    const modelEl = document.getElementById(`set-backup-model-${index}`);
+    if (!modelEl || !platformEl) return;
+
+    const platform = normalizePlatformName(platformEl.value);
+    if (!platform) {
+        modelEl.innerHTML = '<option value="">未启用</option>';
+        modelEl.value = '';
+        return;
+    }
+
+    // 优先从 settingsPlatformConfigs 读取绑定的 models 列表
+    const prov = settingsPlatformConfigs[platform] || {};
+    let allModels = [];
+    if (Array.isArray(prov.models) && prov.models.length > 0) {
+        allModels = prov.models;
+    } else {
+        const defaultModels = DEFAULT_PLATFORM_MODELS[platform] || [];
+        const customModels = settingsCustomPlatformModels[platform] || [];
+        allModels = [...defaultModels, ...customModels].map(m => ({ id: m, displayName: '' }));
+    }
+
+    const uniq = [];
+    const seen = new Set();
+    allModels.forEach((m) => {
+        const n = normalizeModelName(m.id);
+        if (!n || seen.has(n)) return;
+        seen.add(n);
+        uniq.push(m);
+    });
+
+    modelEl.innerHTML = uniq.map((m) => `<option value="${m.id}">${m.displayName || m.id}</option>`).join('');
+
+    const target = normalizeModelName(selectedModel);
+    if (target) {
+        if (!seen.has(target)) {
+            modelEl.insertAdjacentHTML('beforeend', `<option value="${target}">${target}</option>`);
+        }
+        modelEl.value = target;
+    } else if (uniq.length > 0) {
+        modelEl.value = uniq[0].id;
+    }
+}
+
 // 轻量提示弹层（设置保存专用）
 let centerToastWrapper = null;
 let centerToastEl = null;
@@ -3793,6 +3868,12 @@ async function loadSettings() {
         renderPlatformOptions(ai.platform || 'google');
         syncModelOptions(ai.model || '');
 
+        renderBackupPlatformOptions(1, ai.backup_platform_1 || '');
+        syncBackupModelOptions(1, ai.backup_model_1 || '');
+
+        renderBackupPlatformOptions(2, ai.backup_platform_2 || '');
+        syncBackupModelOptions(2, ai.backup_model_2 || '');
+
         // 期数配置
         const fieldMap = {
             'set-zodiac-trend': periods.zodiac_trend ?? 200,
@@ -3861,10 +3942,19 @@ async function saveSettings() {
         const activePlatform = normalizePlatformName(document.getElementById('set-ai-platform')?.value || 'google');
         const activeModel = normalizeModelName(document.getElementById('set-ai-model')?.value || '');
 
+        const backupPlatform1 = normalizePlatformName(document.getElementById('set-backup-platform-1')?.value || '');
+        const backupModel1 = normalizeModelName(document.getElementById('set-backup-model-1')?.value || '');
+        const backupPlatform2 = normalizePlatformName(document.getElementById('set-backup-platform-2')?.value || '');
+        const backupModel2 = normalizeModelName(document.getElementById('set-backup-model-2')?.value || '');
+
         const payload = {
             ai: {
                 platform: activePlatform,
                 model: activeModel,
+                backup_platform_1: backupPlatform1,
+                backup_model_1: backupModel1,
+                backup_platform_2: backupPlatform2,
+                backup_model_2: backupModel2,
                 custom_platforms: settingsCustomPlatforms.slice(),
                 custom_platform_models: customPlatformModelsSync,
                 providers: payloadProviders,
