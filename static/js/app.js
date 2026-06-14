@@ -2321,6 +2321,9 @@ function renderHistory(data) {
                         <span class="table-ball ${colorClass}" style="margin: 0;">${row.special_num}</span>
                     </div>
                 </td>
+                <td style="text-align: center;">
+                    <button class="table-copy-btn" onclick="copyTableLine(this)" title="复制该期号码" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 5px 8px; border-radius: var(--radius-xs); font-size: 0.8rem; cursor: pointer; color: var(--text-secondary); display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.12)'; this.style.color='#fff';" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.color='var(--text-secondary)';">📋 复制</button>
+                </td>
             </tr>
         `;
     }).join('');
@@ -3863,6 +3866,60 @@ function fallbackCopyText(text, successMsg) {
     document.body.removeChild(textArea);
 }
 
+// 复制历史记录卡片中的球号
+function copyHistoryBalls(btn) {
+    const container = btn.closest('.ai-card-sidebar') || btn.parentElement;
+    if (!container) return;
+    const ballDivs = container.querySelectorAll('.lottery-ball');
+    if (ballDivs.length === 0) return;
+    
+    const nums = [];
+    ballDivs.forEach(div => {
+        nums.push(div.textContent.trim());
+    });
+    
+    let text = '';
+    if (nums.length > 1) {
+        const regular = nums.slice(0, -1).join(', ');
+        const special = nums[nums.length - 1];
+        text = `${regular} + ${special}`;
+    } else {
+        text = nums[0];
+    }
+    
+    copyTextToClipboard(text, '已成功复制历史预测号码：' + text);
+}
+
+// 复制开奖历史表格中的一行号码
+function copyTableLine(btn) {
+    const tr = btn.closest('tr');
+    if (!tr) return;
+    
+    // 获取正码球 (在第三列 td 里)
+    const regularBallEls = tr.querySelectorAll('td:nth-child(3) .table-ball');
+    // 获取特码球 (在第四列 td 里)
+    const specialBallEl = tr.querySelector('td:nth-child(4) .table-ball');
+    
+    if (regularBallEls.length === 0 && !specialBallEl) return;
+    
+    const regularNums = Array.from(regularBallEls).map(el => el.textContent.trim());
+    const specialNum = specialBallEl ? specialBallEl.textContent.trim() : '';
+    
+    let text = '';
+    if (regularNums.length > 0) {
+        text = regularNums.join(', ');
+        if (specialNum) {
+            text += ' + ' + specialNum;
+        }
+    } else {
+        text = specialNum;
+    }
+    
+    const drawNum = tr.querySelector('td:nth-child(1)').textContent.trim();
+    copyTextToClipboard(text, `已成功复制第 ${drawNum} 期开奖号码：${text}`);
+}
+
+
 // 轻量提示弹层（设置保存专用）
 let centerToastWrapper = null;
 let centerToastEl = null;
@@ -4289,9 +4346,12 @@ function renderAIHistory(items) {
                                     }</span>
                                 </div>
                             </div>
-                            <div style="display: flex; gap: 6px;">
-                                <button class="btn-sync" style="flex: 1; background: rgba(34, 197, 94, 0.1); color: #86efac; border-color: rgba(34, 197, 94, 0.2); font-size: 0.7rem; padding: 6px; border-radius: 6px;" onclick="shareAICard(this)">📤 分享图片</button>
-                                <button class="btn-sync" style="flex: 1; background: rgba(239, 68, 68, 0.1); color: #fca5a5; border-color: rgba(239, 68, 68, 0.2); font-size: 0.7rem; padding: 6px; border-radius: 6px;" onclick="deleteAIHistory(${item.id})">🗑️ 删除档案</button>
+                            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px; width: 100%;">
+                                <div style="display: flex; gap: 6px; width: 100%;">
+                                    <button class="btn-sync" style="flex: 1; background: rgba(34, 197, 94, 0.1); color: #86efac; border-color: rgba(34, 197, 94, 0.2); font-size: 0.75rem; padding: 7px; border-radius: 6px; white-space: nowrap;" onclick="shareAICard(this)">📤 分享图片</button>
+                                    <button class="btn-sync" style="flex: 1; background: rgba(168, 85, 247, 0.15); color: #d8b4fe; border-color: rgba(168, 85, 247, 0.25); font-size: 0.75rem; padding: 7px; border-radius: 6px; white-space: nowrap;" onclick="copyHistoryBalls(this)">📋 复制号码</button>
+                                </div>
+                                <button class="btn-sync" style="width: 100%; background: rgba(239, 68, 68, 0.1); color: #fca5a5; border-color: rgba(239, 68, 68, 0.2); font-size: 0.75rem; padding: 7px; border-radius: 6px; display: block;" onclick="deleteAIHistory(${item.id})">🗑️ 删除档案</button>
                             </div>
                         </div>
 
