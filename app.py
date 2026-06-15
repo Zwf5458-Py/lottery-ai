@@ -317,22 +317,48 @@ from modules.auth import (
 app = Flask(__name__)
 secret_key = os.environ.get("FLASK_SECRET_KEY")
 if not secret_key:
-    # 尝试从持久化文件读取，避免多 worker 随机密钥不一致导致 Session/CSRF 校验失败
+    import time
+    # 尝试从持久化文件读取，使用原子操作避免多 worker 并发启动时生成不一致的随机密钥
     key_file_path = os.path.join(os.path.dirname(__file__), "data", "secret_key.txt")
-    os.makedirs(os.path.dirname(key_file_path), exist_ok=True)
-    if os.path.exists(key_file_path):
+    try:
+        os.makedirs(os.path.dirname(key_file_path), exist_ok=True)
+    except Exception:
+        pass
+    
+    # 循环尝试读取或原子写入
+    for _ in range(5):
+        if os.path.exists(key_file_path):
+            try:
+                with open(key_file_path, "r", encoding="utf-8") as f:
+                    val = f.read().strip()
+                    if val:
+                        secret_key = val
+                        break
+            except Exception:
+                pass
+        
+        # 尝试使用 O_CREAT | O_EXCL 原子创建
         try:
-            with open(key_file_path, "r", encoding="utf-8") as f:
-                secret_key = f.read().strip()
+            fd = os.open(key_file_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            try:
+                generated = os.urandom(32).hex()
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    f.write(generated)
+                secret_key = generated
+                break
+            except Exception:
+                pass
+        except FileExistsError:
+            time.sleep(0.1) # 其它 worker 正在写入，稍等后重试读取
         except Exception:
-            pass
+            break
+            
+    # 极端降级机制：如果读写文件都失败（如只读文件系统），基于路径哈希生成一致的 fallback 秘钥
     if not secret_key:
-        secret_key = os.urandom(32).hex()
-        try:
-            with open(key_file_path, "w", encoding="utf-8") as f:
-                f.write(secret_key)
-        except Exception:
-            pass
+        import hashlib
+        stable_seed = f"lottery-ai-fallback-secret-salt-{os.path.dirname(os.path.abspath(__file__))}"
+        secret_key = hashlib.sha256(stable_seed.encode("utf-8")).hexdigest()
+
 app.secret_key = secret_key
 
 app.config.update(
