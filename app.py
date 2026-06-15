@@ -315,6 +315,15 @@ from modules.auth import (
 )
 
 app = Flask(__name__)
+
+@app.after_request
+def add_header(response):
+    if request.path.startswith('/static/'):
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    return response
+
 secret_key = os.environ.get("FLASK_SECRET_KEY")
 if not secret_key:
     import time
@@ -679,83 +688,142 @@ def api_simulate():
 
         # AI 模式
         if mode == "ai":
-            from modules.ai_engine import analyze_with_ai
+            from modules.ai_engine import analyze_with_ai_stream, analyze_with_ai
             from modules.statistics_engine import get_zodiac_mapping
             import json
             from modules.data_processor import get_db_connection
             from modules.config_manager import load_config
-
+            from flask import Response, stream_with_context
+            
+            is_stream = data.get("stream", False)
             stats = get_full_analysis(lottery_type)
-            ai_result = analyze_with_ai(stats, lottery_type, dimensions)
+            
+            if is_stream:
+                def generate_ai_stream():
+                    import json
+                    from modules.simulator import simulate_single
+                    
+                    final_ai_result = None
+                    try:
+                        for chunk in analyze_with_ai_stream(stats, lottery_type, dimensions):
+                            if chunk["type"] == "chunk":
+                                yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+                            elif chunk["type"] == "result":
+                                final_ai_result = chunk["payload"]
+                                
+                        if not final_ai_result:
+                            final_ai_result = {"success": False, "error": "流中断，未能获取最终结果"}
+                            
+                        # 为 AI 结果补充生肖映射
+                        if lottery_type != 'weilitsai':
+                            z_map = get_zodiac_mapping(lottery_type)
+                            if "numbers" in final_ai_result and final_ai_result["numbers"]:
+                                final_ai_result["zodiacs"] = [z_map.get(n, "") for n in final_ai_result["numbers"]]
+                            if "special_num" in final_ai_result and final_ai_result["special_num"]:
+                                final_ai_result["special_zodiac"] = z_map.get(final_ai_result["special_num"], "")
+                        else:
+                            final_ai_result["zodiacs"] = []
+                            final_ai_result["special_zodiac"] = ""
+                            
+                        # 持久化
+                        try:
+                            if final_ai_result.get("success", False):
+                                cfg = load_config(session.get("user_id"))
+                                model_name = cfg.get("ai", {}).get("model", "gemini-2.5-pro")
+                                from modules.auth import get_user_db_connection
+                                conn = get_user_db_connection(session["user_id"])
+                                conn.execute(
+                                    "INSERT INTO ai_analysis_history (lottery_type, model_name, dimensions, result_json) VALUES (?, ?, ?, ?)",
+                                    (lottery_type, model_name, json.dumps(dimensions, ensure_ascii=False), json.dumps(final_ai_result, ensure_ascii=False))
+                                )
+                                conn.commit()
+                                conn.close()
+                        except Exception as e:
+                            logger.error(f"保存 AI 分析记录失败: {e}")
+                            
+                        # 加权对比与退分
+                        weighted_result = simulate_single(lottery_type, dimensions)
+                        pb = points_balance
+                        pd_amt = points_deducted
+                        if pd_amt > 0 and not final_ai_result.get("success", False):
+                            try:
+                                from modules.points_manager import add_points
+                                refund_res = add_points(session["user_id"], pd_amt, "ai_simulation_refund", f"mode={mode},lottery_type={lottery_type}")
+                                if refund_res.get("success"):
+                                    pb = refund_res.get("balance")
+                                    pd_amt = 0
+                            except: pass
+                            
+                        result = {
+                            "mode": "ai",
+                            "ai_result": final_ai_result,
+                            "weighted_result": weighted_result,
+                            "points_deducted": pd_amt,
+                            "points_balance": pb,
+                        }
+                        
+                        yield f"data: {json.dumps({'type': 'result', 'payload': {'success': True, 'data': result}}, ensure_ascii=False)}\n\n"
+                        
+                    except Exception as e:
+                        logger.error(f"AI Stream Error: {e}")
+                        yield f"data: {json.dumps({'type': 'result', 'payload': {'success': False, 'error': str(e)}}, ensure_ascii=False)}\n\n"
 
-            # 为 AI 结果补充生肖映射
-            if lottery_type != 'weilitsai':
-                z_map = get_zodiac_mapping(lottery_type)
-                if "numbers" in ai_result and ai_result["numbers"]:
-                    ai_result["zodiacs"] = [z_map.get(n, "") for n in ai_result["numbers"]]
-                if "special_num" in ai_result and ai_result["special_num"]:
-                    ai_result["special_zodiac"] = z_map.get(ai_result["special_num"], "")
+                return Response(stream_with_context(generate_ai_stream()), mimetype='text/event-stream')
+
             else:
-                ai_result["zodiacs"] = []
-                ai_result["special_zodiac"] = ""
+                ai_result = analyze_with_ai(stats, lottery_type, dimensions)
 
-            # ====== 新增：持久化 AI 推理过程到数据库 ======
-            try:
-                if ai_result.get("success", False):
-                    cfg = load_config(session.get("user_id"))
-                    model_name = cfg.get("ai", {}).get("model", "gemini-2.5-pro")
-                    conn = get_user_db_connection(session["user_id"])
-                    conn.execute(
-                        """
-                        INSERT INTO ai_analysis_history
-                        (lottery_type, model_name, dimensions, result_json)
-                        VALUES (?, ?, ?, ?)
-                    """,
-                        (
-                            lottery_type,
-                            model_name,
-                            json.dumps(dimensions, ensure_ascii=False),
-                            json.dumps(ai_result, ensure_ascii=False),
-                        ),
-                    )
-                    conn.commit()
-                    conn.close()
-            except Exception as e:
-                logger.error(f"保存 AI 分析记录失败: {e}")
+                # 为 AI 结果补充生肖映射
+                if lottery_type != 'weilitsai':
+                    z_map = get_zodiac_mapping(lottery_type)
+                    if "numbers" in ai_result and ai_result["numbers"]:
+                        ai_result["zodiacs"] = [z_map.get(n, "") for n in ai_result["numbers"]]
+                    if "special_num" in ai_result and ai_result["special_num"]:
+                        ai_result["special_zodiac"] = z_map.get(ai_result["special_num"], "")
+                else:
+                    ai_result["zodiacs"] = []
+                    ai_result["special_zodiac"] = ""
 
-            # 同时生成传统加权结果作为对比
-            weighted_result = simulate_single(lottery_type, dimensions)
-
-            # AI 失败则自动退回积分
-            if points_deducted > 0 and not ai_result.get("success", False):
+                # ====== 新增：持久化 AI 推理过程到数据库 ======
                 try:
-                    from modules.points_manager import add_points
+                    if ai_result.get("success", False):
+                        cfg = load_config(session.get("user_id"))
+                        model_name = cfg.get("ai", {}).get("model", "gemini-2.5-pro")
+                        from modules.data_processor import get_user_db_connection
+                        conn = get_user_db_connection(session["user_id"])
+                        conn.execute(
+                            "INSERT INTO ai_analysis_history (lottery_type, model_name, dimensions, result_json) VALUES (?, ?, ?, ?)",
+                            (lottery_type, model_name, json.dumps(dimensions, ensure_ascii=False), json.dumps(ai_result, ensure_ascii=False))
+                        )
+                        conn.commit()
+                        conn.close()
+                except Exception as e:
+                    logger.error(f"保存 AI 分析记录失败: {e}")
 
-                    refund_res = add_points(
-                        session["user_id"],
-                        points_deducted,
-                        "ai_simulation_refund",
-                        f"mode={mode},lottery_type={lottery_type}",
-                    )
-                    if refund_res.get("success"):
-                        points_balance = refund_res.get("balance")
-                        points_deducted = 0
-                except Exception as refund_error:
-                    logger.error(f"AI 失败后积分退回异常: {refund_error}")
+                # 同时生成传统加权结果作为对比
+                weighted_result = simulate_single(lottery_type, dimensions)
 
-            return jsonify(
-                {
+                # AI 失败则自动退回积分
+                if points_deducted > 0 and not ai_result.get("success", False):
+                    try:
+                        from modules.points_manager import add_points
+                        refund_res = add_points(session["user_id"], points_deducted, "ai_simulation_refund", f"mode={mode},lottery_type={lottery_type}")
+                        if refund_res.get("success"):
+                            points_balance = refund_res.get("balance")
+                            points_deducted = 0
+                    except Exception as refund_error:
+                        logger.error(f"AI 失败后积分退回异常: {refund_error}")
+
+                return jsonify({
                     "success": True,
                     "data": {
                         "mode": "ai",
                         "ai_result": ai_result,
                         "weighted_result": weighted_result,
-                        "dimensions": dimensions,
                         "points_deducted": points_deducted,
                         "points_balance": points_balance,
-                    },
-                }
-            )
+                    }
+                })
 
         # AI 生肖专属推算模式
         if mode == "ai_zodiac":
@@ -1059,54 +1127,109 @@ def api_simulate_wheeling():
     }
     
     ai_result = None
+    is_stream = data.get('stream', False)
+
     if data.get('mode') == 'ai':
-        try:
-            from modules.statistics_engine import get_full_analysis, get_zodiac_mapping
-            from modules.ai_engine import analyze_with_ai
-            import logging
-            stats = get_full_analysis(lottery_type)
-            ai_result = analyze_with_ai(stats, lottery_type, dimensions, pool=pool, special_num=base_special_num)
-            
-            # 补齐生肖映射
-            if lottery_type != 'weilitsai':
-                z_map_ai = get_zodiac_mapping(lottery_type)
-                if "numbers" in ai_result and ai_result["numbers"]:
-                    ai_result["zodiacs"] = [z_map_ai.get(n, "") for n in ai_result["numbers"]]
-                if "special_num" in ai_result and ai_result["special_num"]:
-                    ai_result["special_zodiac"] = z_map_ai.get(ai_result["special_num"], "")
-            else:
-                ai_result["zodiacs"] = []
-                ai_result["special_zodiac"] = ""
-                
-            # 保存到用户独立的 AI 历史数据库中
-            try:
+        from modules.statistics_engine import get_full_analysis, get_zodiac_mapping
+        import logging
+        stats = get_full_analysis(lottery_type)
+        
+        if is_stream:
+            def generate_wheeling_stream():
                 import json
-                from modules.config_manager import load_config
-                from modules.auth import get_user_db_connection
-                cfg = load_config(session.get("user_id"))
-                model_name = cfg.get("ai", {}).get("model", "gemini-2.5-pro")
-                conn = get_user_db_connection(session["user_id"])
-                conn.execute(
-                    """
-                    INSERT INTO ai_analysis_history
-                    (lottery_type, model_name, dimensions, result_json)
-                    VALUES (?, ?, ?, ?)
-                """,
-                    (
-                        lottery_type,
-                        model_name,
-                        json.dumps(dimensions, ensure_ascii=False),
-                        json.dumps(ai_result, ensure_ascii=False),
-                    ),
-                )
-                conn.commit()
-                conn.close()
-            except Exception as db_err:
-                logging.getLogger('app').error(f"旋转矩阵保存 AI 记录失败: {db_err}")
+                from modules.ai_engine import analyze_with_ai_stream
+                final_ai_result = None
+                try:
+                    for chunk in analyze_with_ai_stream(stats, lottery_type, dimensions, pool=pool, special_num=base_special_num):
+                        if chunk["type"] == "chunk":
+                            yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+                        elif chunk["type"] == "result":
+                            final_ai_result = chunk["payload"]
+                            
+                    if not final_ai_result:
+                        final_ai_result = {"success": False, "error": "流中断，未能获取最终结果"}
+                        
+                    # 补齐生肖映射
+                    if lottery_type != 'weilitsai':
+                        z_map_ai = get_zodiac_mapping(lottery_type)
+                        if "numbers" in final_ai_result and final_ai_result["numbers"]:
+                            final_ai_result["zodiacs"] = [z_map_ai.get(n, "") for n in final_ai_result["numbers"]]
+                        if "special_num" in final_ai_result and final_ai_result["special_num"]:
+                            final_ai_result["special_zodiac"] = z_map_ai.get(final_ai_result["special_num"], "")
+                    else:
+                        final_ai_result["zodiacs"] = []
+                        final_ai_result["special_zodiac"] = ""
+                        
+                    # 保存记录
+                    try:
+                        if final_ai_result.get("success", False):
+                            from modules.config_manager import load_config
+                            from modules.auth import get_user_db_connection
+                            cfg = load_config(session.get("user_id"))
+                            model_name = cfg.get("ai", {}).get("model", "gemini-2.5-pro")
+                            conn = get_user_db_connection(session["user_id"])
+                            conn.execute(
+                                "INSERT INTO ai_analysis_history (lottery_type, model_name, dimensions, result_json) VALUES (?, ?, ?, ?)",
+                                (lottery_type, model_name, json.dumps(dimensions, ensure_ascii=False), json.dumps(final_ai_result, ensure_ascii=False))
+                            )
+                            conn.commit()
+                            conn.close()
+                    except Exception as db_err:
+                        logging.getLogger('app').error(f"旋转矩阵保存 AI 记录失败: {db_err}")
+                        
+                    # 最终结果推送
+                    result_payload = {
+                        'success': True,
+                        'data': {
+                            'draws': draws,
+                            'summary': summary,
+                            'ai_result': final_ai_result
+                        },
+                        'points': get_user_points(session['user_id'])
+                    }
+                    yield f"data: {json.dumps({'type': 'result', 'payload': result_payload}, ensure_ascii=False)}\n\n"
+                    
+                except Exception as e:
+                    logging.getLogger('app').error(f"旋转矩阵AI流推算失败: {e}")
+                    import json
+                    yield f"data: {json.dumps({'type': 'result', 'payload': {'success': False, 'error': str(e)}}, ensure_ascii=False)}\n\n"
+                    
+            from flask import Response, stream_with_context
+            return Response(stream_with_context(generate_wheeling_stream()), mimetype='text/event-stream')
+
+        else:
+            try:
+                from modules.ai_engine import analyze_with_ai
+                ai_result = analyze_with_ai(stats, lottery_type, dimensions, pool=pool, special_num=base_special_num)
                 
-        except Exception as e:
-            import logging
-            logging.getLogger('app').error(f"旋转矩阵大模型推算失败: {e}")
+                if lottery_type != 'weilitsai':
+                    z_map_ai = get_zodiac_mapping(lottery_type)
+                    if "numbers" in ai_result and ai_result["numbers"]:
+                        ai_result["zodiacs"] = [z_map_ai.get(n, "") for n in ai_result["numbers"]]
+                    if "special_num" in ai_result and ai_result["special_num"]:
+                        ai_result["special_zodiac"] = z_map_ai.get(ai_result["special_num"], "")
+                else:
+                    ai_result["zodiacs"] = []
+                    ai_result["special_zodiac"] = ""
+                    
+                try:
+                    import json
+                    from modules.config_manager import load_config
+                    from modules.auth import get_user_db_connection
+                    cfg = load_config(session.get("user_id"))
+                    model_name = cfg.get("ai", {}).get("model", "gemini-2.5-pro")
+                    conn = get_user_db_connection(session["user_id"])
+                    conn.execute(
+                        "INSERT INTO ai_analysis_history (lottery_type, model_name, dimensions, result_json) VALUES (?, ?, ?, ?)",
+                        (lottery_type, model_name, json.dumps(dimensions, ensure_ascii=False), json.dumps(ai_result, ensure_ascii=False))
+                    )
+                    conn.commit()
+                    conn.close()
+                except Exception as db_err:
+                    logging.getLogger('app').error(f"旋转矩阵保存 AI 记录失败: {db_err}")
+                    
+            except Exception as e:
+                logging.getLogger('app').error(f"旋转矩阵大模型推算失败: {e}")
 
     result = {
         'draws': draws,
