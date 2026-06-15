@@ -2448,7 +2448,8 @@ if __name__ == "__main__":
         logger.warning(
             "FLASK_SECRET_KEY 未设置，当前使用进程内临时密钥（重启后会失效）。"
         )
-    debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
+    # 强制在开发阶段开启 debug 模式，防止 index.html 被永久缓存
+    debug_mode = True
     host = os.environ.get("FLASK_HOST", "127.0.0.1")
     port = int(os.environ.get("FLASK_PORT", "5000"))
     logger.info("🎰 澳门六合彩历史数据分析与模拟开奖系统")

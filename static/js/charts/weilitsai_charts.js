@@ -366,13 +366,14 @@ function renderMarkovChart(markovData) {
                     ticks: {
                         display: false,
                         min: 0.4,
-                        max: Math.max(2.6, maxVal + 0.2)
+                        max: Math.max(2.6, maxVal + 0.6)
                     },
                     pointLabels: {
                         display: true,
                         centerPointLabels: true,
                         color: '#9ca3af',
-                        font: { size: 12, weight: 'bold' }
+                        font: { size: 12, weight: 'bold' },
+                        padding: 15
                     }
                 }
             },

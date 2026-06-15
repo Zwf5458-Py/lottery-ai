@@ -89,7 +89,7 @@ function renderZodiacChart(zodiacData) {
     const draws = zodiacData.draws || [];
     const zodiacOrder = zodiacData.zodiac_order || [];
     const BALL_R = 11;
-    const ROW_H = BALL_R * 2 + 1; // 直径+1px，红球与网格近乎相切
+    const ROW_H = 34; // 增大行高，使生肖标签在垂直方向上有足够间距
 
     const labels = [];
     const scatterData = draws.map((d, i) => {
@@ -104,7 +104,7 @@ function renderZodiacChart(zodiacData) {
     container.style.width = totalW + 'px';
 
     const chartAreaH = 13 * ROW_H; // 稍微增加高度以容纳扩大的 Y 轴区间
-    const padTop = 25, padBot = 25, xAxisH = 60;
+    const padTop = 15, padBot = 15, xAxisH = 0;
     const totalH = chartAreaH + padTop + padBot + xAxisH;
     container.style.height = totalH + 'px';
 
@@ -139,7 +139,9 @@ function renderZodiacChart(zodiacData) {
         type: 'scatter',
         data: {
             datasets: [{
-                data: scatterData, pointRadius: 0,
+                data: scatterData, pointRadius: BALL_R, pointHoverRadius: BALL_R + 2,
+                pointBackgroundColor: 'transparent', pointBorderColor: 'transparent',
+                pointHoverBackgroundColor: 'rgba(255,255,255,0.2)', pointHoverBorderColor: 'rgba(255,255,255,0.8)',
                 showLine: true, borderColor: 'rgba(239,68,68,0.45)', borderWidth: 1.5, tension: 0
             }]
         },
@@ -167,6 +169,7 @@ function renderZodiacChart(zodiacData) {
                     labels: labels,
                     grid: { color: 'rgba(255,255,255,0.03)' },
                     ticks: {
+                        display: false,
                         color: '#6b7280', font: { size: 10 },
                         maxRotation: 45, minRotation: 45,
                         autoSkip: true,

@@ -26,14 +26,16 @@ function renderFrequencyChart(frequency, bayesian, markov) {
         sortedMarkov.slice(0, 3).forEach(m => predictedNums.add(m[0].toString()));
     }
 
-    // 准备星星悬浮层的数据
-    const scatterData = [];
-    Object.keys(frequency).forEach((n, idx) => {
-        if (predictedNums.has(n.toString())) {
-            // 将星星放在柱子上方的 y 位置
-            scatterData.push({ x: idx, y: values[idx] + (maxVal * 0.05 || 1) });
-        }
-    });
+    // 动态注入闪烁动画的 CSS
+    if (!document.getElementById('star-blink-style')) {
+        const style = document.createElement('style');
+        style.id = 'star-blink-style';
+        style.innerHTML = `@keyframes star-blink { 
+            0% { opacity: 0.3; transform: translate(-50%, -50%) scale(0.8); filter: drop-shadow(0 0 2px rgba(255,215,0,0.5)); } 
+            100% { opacity: 1; transform: translate(-50%, -50%) scale(1.3); filter: drop-shadow(0 0 8px rgba(255,215,0,1)); } 
+        }`;
+        document.head.appendChild(style);
+    }
 
     const legendEl = document.getElementById('frequency-legend');
     if (legendEl) {
@@ -47,17 +49,6 @@ function renderFrequencyChart(frequency, bayesian, markov) {
         data: {
             labels: labels,
             datasets: [
-                {
-                    type: 'scatter',
-                    label: '预测命中 (贝叶斯/马尔可夫)',
-                    data: scatterData,
-                    pointStyle: 'star',
-                    pointRadius: 6,
-                    pointHoverRadius: 8,
-                    backgroundColor: '#fbbf24',
-                    borderColor: '#fbbf24',
-                    showLine: false
-                },
                 {
                     type: 'bar',
                     label: '出现次数',
@@ -92,7 +83,38 @@ function renderFrequencyChart(frequency, bayesian, markov) {
                     grid: { color: 'rgba(255,255,255,0.04)' }
                 }
             }
-        }
+        },
+        plugins: [{
+            id: 'htmlStars',
+            afterRender(chart) {
+                const container = chart.canvas.parentElement;
+                container.style.position = 'relative';
+                container.querySelectorAll('.blink-star').forEach(el => el.remove());
+                
+                const meta = chart.getDatasetMeta(0);
+                if (!meta.data) return;
+                
+                const freqKeys = Object.keys(frequency);
+                meta.data.forEach((bar, idx) => {
+                    const n = freqKeys[idx];
+                    if (predictedNums.has(n.toString())) {
+                        const pt = bar.tooltipPosition();
+                        const star = document.createElement('div');
+                        star.className = 'blink-star';
+                        star.innerHTML = '✨';
+                        star.style.position = 'absolute';
+                        star.style.left = pt.x + 'px';
+                        star.style.top = (pt.y - 18) + 'px';
+                        star.style.transform = 'translate(-50%, -50%)';
+                        star.style.fontSize = '18px';
+                        star.style.pointerEvents = 'none';
+                        star.style.zIndex = '10';
+                        star.style.animation = 'star-blink 0.6s infinite alternate ease-in-out';
+                        container.appendChild(star);
+                    }
+                });
+            }
+        }]
     });
 }
 

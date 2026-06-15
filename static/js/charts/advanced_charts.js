@@ -12,6 +12,13 @@ function renderThreeRegionPrimeCharts(threeRegion, primeComp) {
     const trLabels = Object.keys(threeRegion.distribution);
     const trData = Object.values(threeRegion.distribution);
     
+    const trColors = [
+        '#a855f7', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#6366f1',
+        '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#06b6d4', '#84cc16',
+        '#d946ef', '#0ea5e9', '#22c55e', '#eab308', '#f43f5e', '#4f46e5', '#c026d3'
+    ];
+    const bgColors = trLabels.map((_, i) => trColors[i % trColors.length]);
+
     if (window.chartThreeRegion) window.chartThreeRegion.destroy();
     window.chartThreeRegion = new Chart(trCtx, {
         type: 'doughnut',
@@ -19,7 +26,7 @@ function renderThreeRegionPrimeCharts(threeRegion, primeComp) {
             labels: trLabels.map(l => `[${l}] 形态`),
             datasets: [{
                 data: trData,
-                backgroundColor: ['#a855f7', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#6366f1'],
+                backgroundColor: bgColors,
                 borderWidth: 0,
                 hoverOffset: 10
             }]
@@ -28,14 +35,33 @@ function renderThreeRegionPrimeCharts(threeRegion, primeComp) {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { position: 'right', labels: { color: '#e5e7eb' } },
+                legend: { display: false },
                 title: { display: true, text: '历史三分形态分布', color: '#f3f4f6' }
             }
         }
     });
 
+    // 渲染双边自定义 HTML 图例
+    const half = Math.ceil(trLabels.length / 2);
+    let leftHtml = '';
+    let rightHtml = '';
+    trLabels.forEach((l, idx) => {
+        const color = bgColors[idx];
+        const itemHtml = `<div style="display:flex; align-items:center; gap:6px;"><span style="width:12px;height:12px;background:${color};border-radius:3px;display:inline-block;flex-shrink:0;"></span><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">[${l}] 形态</span></div>`;
+        if (idx < half) leftHtml += itemHtml;
+        else rightHtml += itemHtml;
+    });
+    
+    const elLeft = document.getElementById('legend-tr-left');
+    const elRight = document.getElementById('legend-tr-right');
+    if (elLeft) elLeft.innerHTML = leftHtml;
+    if (elRight) elRight.innerHTML = rightHtml;
+
     const pcLabels = Object.keys(primeComp.distribution);
     const pcData = Object.values(primeComp.distribution);
+
+    const pcColors = ['#2dd4bf', '#f43f5e', '#eab308', '#3b82f6', '#8b5cf6', '#14b8a6', '#f97316', '#a855f7', '#ec4899'];
+    const pcBgColors = pcLabels.map((_, i) => pcColors[i % pcColors.length]);
 
     if (window.chartPrimeComp) window.chartPrimeComp.destroy();
     window.chartPrimeComp = new Chart(pcCtx, {
@@ -44,7 +70,7 @@ function renderThreeRegionPrimeCharts(threeRegion, primeComp) {
             labels: pcLabels.map(l => `[${l}] (质:合)`),
             datasets: [{
                 data: pcData,
-                backgroundColor: ['#2dd4bf', '#f43f5e', '#eab308', '#3b82f6', '#8b5cf6', '#14b8a6'],
+                backgroundColor: pcBgColors,
                 borderWidth: 0,
                 hoverOffset: 10
             }]
@@ -53,11 +79,27 @@ function renderThreeRegionPrimeCharts(threeRegion, primeComp) {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { position: 'right', labels: { color: '#e5e7eb' } },
+                legend: { display: false },
                 title: { display: true, text: '历史质合形态分布', color: '#f3f4f6' }
             }
         }
     });
+
+    // 渲染双边自定义 HTML 图例 (质合形态)
+    const pcHalf = Math.ceil(pcLabels.length / 2);
+    let pcLeftHtml = '';
+    let pcRightHtml = '';
+    pcLabels.forEach((l, idx) => {
+        const color = pcBgColors[idx];
+        const itemHtml = `<div style="display:flex; align-items:center; gap:6px;"><span style="width:12px;height:12px;background:${color};border-radius:3px;display:inline-block;flex-shrink:0;"></span><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">[${l}] (质:合)</span></div>`;
+        if (idx < pcHalf) pcLeftHtml += itemHtml;
+        else pcRightHtml += itemHtml;
+    });
+    
+    const elPcLeft = document.getElementById('legend-pc-left');
+    const elPcRight = document.getElementById('legend-pc-right');
+    if (elPcLeft) elPcLeft.innerHTML = pcLeftHtml;
+    if (elPcRight) elPcRight.innerHTML = pcRightHtml;
 }
 
 function renderRepeatsTailsCharts(repeatsTails) {

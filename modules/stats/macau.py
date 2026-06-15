@@ -1,6 +1,7 @@
 from modules.constants import get_zodiac_mapping, get_color, RED_NUMS, BLUE_NUMS, GREEN_NUMS, ZODIAC_ORDER, NUM_TO_ZODIAC_IDX, ZODIAC_NUMS
 from modules.data_processor import load_data, clean_data, get_db_connection
 import pandas as pd
+import math
 from collections import Counter
 from modules.constants import get_zodiac_mapping
 from modules.constants import FIVE_ELEMENTS_MAP
@@ -12,6 +13,13 @@ def _get_five_element(num: int) -> str:
         if int(num) in nums:
             return name
     return '未知'
+
+def _chi_square_p_value(chi_sq, df):
+    try:
+        from scipy.stats import chi2
+        return 1 - chi2.cdf(chi_sq, df)
+    except:
+        return 0.5
 
 
 
@@ -127,7 +135,7 @@ def five_elements_analysis(df: pd.DataFrame = None, periods: int = 100) -> dict:
         'chi_square': {
             'stat': round(chi_square, 3),
             'p_value': round(p_value, 4),
-            'significant': p_value < 0.05,
+            'significant': bool(p_value < 0.05),
             'items': chi_items,
             'headline': f"{strongest['element']}偏差最明显" if strongest else '样本不足'
         },

@@ -3,6 +3,31 @@
 
 <head>
     <meta charset="UTF-8">
+    <script>
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+            var div = document.createElement("div");
+            div.style.cssText = "position:fixed; top:0; left:0; right:0; background:red; color:white; z-index:999999; padding:20px; font-size:16px; word-wrap:break-word;";
+            div.innerHTML = "JS Error: " + msg + "<br>Line: " + lineNo + "<br>Stack: " + (error ? error.stack : "");
+            // 等待 body 存在后再添加
+            var checkBody = setInterval(function() {
+                if (document.body) {
+                    document.body.appendChild(div);
+                    clearInterval(checkBody);
+                }
+            }, 100);
+        };
+        window.addEventListener("unhandledrejection", function(event) {
+            var div = document.createElement("div");
+            div.style.cssText = "position:fixed; top:100px; left:0; right:0; background:orange; color:white; z-index:999999; padding:20px; font-size:16px; word-wrap:break-word;";
+            div.innerHTML = "Unhandled Promise: " + (event.reason ? event.reason.stack || event.reason : "Unknown");
+            var checkBody = setInterval(function() {
+                if (document.body) {
+                    document.body.appendChild(div);
+                    clearInterval(checkBody);
+                }
+            }, 100);
+        });
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="澳门六合彩历史数据统计分析与模拟开奖系统，提供冷热号、奇偶比、大小比等客观数据统计。">
     <title>🎰 澳门六合彩 · 数据分析与模拟开奖系统</title>
@@ -854,11 +879,19 @@
                         【三分比】将1区38个号码均分为三区：一区(01-13)、二区(14-25)、三区(26-38)。
                     </div>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; min-height: 250px;">
-                        <div style="position: relative; height: 250px;">
-                            <canvas id="chart-three-region"></canvas>
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; height: 250px;">
+                            <div id="legend-tr-left" style="width: 25%; font-size: 0.75rem; color: #e5e7eb; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; max-height: 100%;"></div>
+                            <div style="flex-grow: 1; position: relative; height: 100%;">
+                                <canvas id="chart-three-region"></canvas>
+                            </div>
+                            <div id="legend-tr-right" style="width: 25%; font-size: 0.75rem; color: #e5e7eb; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; max-height: 100%;"></div>
                         </div>
-                        <div style="position: relative; height: 250px;">
-                            <canvas id="chart-prime-composite"></canvas>
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; height: 250px;">
+                            <div id="legend-pc-left" style="width: 25%; font-size: 0.75rem; color: #e5e7eb; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; max-height: 100%; padding-left: 10px;"></div>
+                            <div style="flex-grow: 1; position: relative; height: 100%;">
+                                <canvas id="chart-prime-composite"></canvas>
+                            </div>
+                            <div id="legend-pc-right" style="width: 25%; font-size: 0.75rem; color: #e5e7eb; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; max-height: 100%;"></div>
                         </div>
                     </div>
                 </div>
