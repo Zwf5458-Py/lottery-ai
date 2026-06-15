@@ -15,11 +15,13 @@ from modules.constants import get_zodiac_mapping, get_color, RED_NUMS, BLUE_NUMS
 from modules.stats.common import (
     number_frequency, hot_cold_numbers, odd_even_ratio, 
     big_small_ratio, tail_number_stats, calculate_omission_thresholds,
-    _get_all_numbers, _get_all_numbers_with_special
+    _get_all_numbers, _get_all_numbers_with_special,
+    _chi_square_p_value
 )
 from modules.stats.macau import (
     five_elements_analysis, zodiac_momentum_analysis, 
-    zodiac_frequency, special_number_frequency, color_hot_cold_analysis
+    zodiac_frequency, special_number_frequency, color_hot_cold_analysis,
+    _get_five_element
 )
 from modules.stats.weilitsai import (
     bayesian_inference, lstm_simulation, zone_1_exclusive_prediction
