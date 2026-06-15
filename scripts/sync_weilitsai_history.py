@@ -32,9 +32,9 @@ def parse_date_str(date_str):
 
 def fetch_and_sync():
     raw_records = []
-    # Scraping 35 pages to cover more than 5 years (35 * 23 = 805 draws)
+    # Scraping 55 pages to cover more than 10 years (55 * 23 = 1265 draws)
     # The lotto-8 page has ~23 rows per page
-    max_pages = 35
+    max_pages = 55
     print(f"开始抓取台湾威力彩历史开奖数据，计划翻页 {max_pages} 页...")
     
     for page in range(1, max_pages + 1):
@@ -109,8 +109,8 @@ def fetch_and_sync():
         for seq, record in enumerate(records_by_year[year], 1):
             draw_number = f"{roc_year}{seq:06d}"
             
-            # Keep records from 2021-01-01 onwards (at least 5 years)
-            if record['draw_date'] >= '2021-01-01':
+            # Keep records from 2016-01-01 onwards (10 years)
+            if record['draw_date'] >= '2016-01-01':
                 final_records.append((
                     'weilitsai',
                     draw_number,
@@ -126,7 +126,7 @@ def fetch_and_sync():
                     ''  # zodiac
                 ))
                 
-    print(f"过滤 2021-01-01 至今的威力彩历史记录共 {len(final_records)} 期。")
+    print(f"过滤 2016-01-01 至今的威力彩历史记录共 {len(final_records)} 期。")
     
     # Write to database
     print(f"正在写入本地数据库: {DB_PATH}")

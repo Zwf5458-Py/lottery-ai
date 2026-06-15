@@ -1,10 +1,9 @@
 import pytest
-from modules.ai_engine import _build_analysis_prompt
+from modules.prompts.weilitsai import _build_weilitsai_analysis_prompt
 
 def test_build_prompt_weilitsai():
-    prompt = _build_analysis_prompt(
+    prompt = _build_weilitsai_analysis_prompt(
         stats={},
-        lottery_type='weilitsai',
         dimensions=[],
         pre_sel_nums=[1,2,3,4,5,6],
         pre_sel_special=8
@@ -27,9 +26,8 @@ def test_build_prompt_weilitsai_markov():
             }
         }
     }
-    prompt = _build_analysis_prompt(
+    prompt = _build_weilitsai_analysis_prompt(
         stats=stats,
-        lottery_type='weilitsai',
         dimensions=['markov'],
         pre_sel_nums=[1,2,3,4,5,6],
         pre_sel_special=8

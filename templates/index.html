@@ -16,7 +16,7 @@
         // 从后端注入当前用户信息，使用字符串再 Parse 避免编辑器语法报错
         window.__USER__ = JSON.parse('{{ user | tojson | safe if user else "{}" }}');
     </script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=11">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ range(1, 100000) | random }}">
     <style>
         .history-tab-btn {
             padding: 8px 16px;
@@ -820,9 +820,106 @@
             <div class="charts-grid">
                 <!-- 号码频率分布 -->
                 <div class="chart-card glass" id="chart-card-frequency">
-                    <h3 class="chart-title">📊 号码出现频率分布</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; margin-bottom: 8px;">
+                        <h3 class="chart-title" style="margin-bottom: 0;">📊 号码出现频率分布</h3>
+                        <div id="frequency-legend" style="display: none; font-size: 0.85rem; color: #fbbf24; background: rgba(251, 191, 36, 0.1); padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(251, 191, 36, 0.3);">
+                            ⭐ 标记为: <span id="freq-legend-text">贝叶斯/马尔可夫高频预测号码</span>
+                        </div>
+                    </div>
                     <div class="chart-container">
                         <canvas id="chart-frequency"></canvas>
+                    </div>
+                </div>
+
+                <!-- 1区专属关联规则预测 -->
+                <div class="chart-card glass" id="chart-card-z1-exclusive" style="display: none;">
+                    <h3 class="chart-title">🎯 1区专属关联规则与移动平均预测</h3>
+                    <div class="chart-container">
+                        <canvas id="chart-z1-exclusive"></canvas>
+                    </div>
+                </div>
+
+
+                <!-- 1区高阶动力学预测 (High-Order Analytics) -->
+                <!-- 1. 区间三分比与质合形态分析 -->
+                <div class="chart-card glass" id="chart-card-three-region-prime" style="display: none;">
+                    <div class="chart-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                        <h3 class="chart-title" style="margin-bottom: 0;">📊 1区区间三分比与质合形态分析</h3>
+                        <div class="chart-actions" style="display: flex; gap: 8px;">
+                            <span class="badge" id="pred-three-region-badge" style="background: rgba(168,85,247,0.2); color: #d8b4fe; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; border: 1px solid rgba(168,85,247,0.3);">下期预测形态: --</span>
+                            <span class="badge" id="pred-prime-badge" style="background: rgba(45,212,191,0.2); color: #5eead4; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; border: 1px solid rgba(45,212,191,0.3);">下期质合预测: --</span>
+                        </div>
+                    </div>
+                    <div class="chart-desc" id="three-region-prime-desc" style="font-size: 0.85rem; color: #9ca3af; margin-bottom: 15px;">
+                        【三分比】将1区38个号码均分为三区：一区(01-13)、二区(14-25)、三区(26-38)。
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; min-height: 250px;">
+                        <div style="position: relative; height: 250px;">
+                            <canvas id="chart-three-region"></canvas>
+                        </div>
+                        <div style="position: relative; height: 250px;">
+                            <canvas id="chart-prime-composite"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. 重号与同尾数走势预测 -->
+                <div class="chart-card glass" id="chart-card-repeats-tails" style="display: none;">
+                    <div class="chart-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                        <h3 class="chart-title" style="margin-bottom: 0;">⚖️ 重号分布 (泊松预测) 与同尾号分析</h3>
+                        <div class="chart-actions" style="display: flex; gap: 8px;">
+                            <span class="badge" id="pred-repeats-badge" style="background: rgba(168,85,247,0.2); color: #d8b4fe; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; border: 1px solid rgba(168,85,247,0.3);">下期重号预测: --个</span>
+                            <span class="badge" id="pred-tails-badge" style="background: rgba(45,212,191,0.2); color: #5eead4; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; border: 1px solid rgba(45,212,191,0.3);">同尾组数预测: --组</span>
+                        </div>
+                    </div>
+                    <div class="chart-desc" style="font-size: 0.85rem; color: #9ca3af; margin-bottom: 15px;">
+                        【泊松重号】基于相邻两期重号率进行泊松拟合预测。【同尾号】统计相同尾号的组数。
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1.3fr 0.9fr; gap: 12px; height: 180px;">
+                        <div style="position: relative; height: 180px;">
+                            <canvas id="chart-repeats-poisson"></canvas>
+                        </div>
+                        <div style="position: relative; height: 180px;">
+                            <canvas id="chart-identical-tails"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. AC值（算术复杂度）预测 -->
+                <div class="chart-card glass" id="chart-card-ac-value" style="display: none;">
+                    <div class="chart-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                        <h3 class="chart-title" style="margin-bottom: 0;">🧩 1区号码 AC值 (算术复杂度) 统计预测</h3>
+                        <div class="chart-actions" style="display: flex; gap: 8px;">
+                            <span class="badge" id="pred-ac-badge" style="background: rgba(168,85,247,0.2); color: #d8b4fe; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; border: 1px solid rgba(168,85,247,0.3);">下期 AC 预测: --</span>
+                        </div>
+                    </div>
+                    <div class="chart-desc" style="font-size: 0.85rem; color: #9ca3af; margin-bottom: 15px;">
+                        【AC值】衡量号码随机性的指标，一般在7-10占85%以上。低于6则说明分布过于规律。
+                    </div>
+                    <div style="position: relative; height: 180px;">
+                        <canvas id="chart-ac-value"></canvas>
+                    </div>
+                </div>
+
+                <!-- 3. 极距与和值均值回归 -->
+                <div class="chart-card glass" id="chart-card-range-drift" style="display: none;">
+                    <div class="chart-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                        <h3 class="chart-title" style="margin-bottom: 0;">📉 极距分布与和值中心均值回归轨迹</h3>
+                        <div class="chart-actions" style="display: flex; gap: 8px;">
+                            <span class="badge" id="pred-span-badge" style="background: rgba(168,85,247,0.2); color: #d8b4fe; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; border: 1px solid rgba(168,85,247,0.3);">下期极距预测: --</span>
+                            <span class="badge" id="pred-sum-badge" style="background: rgba(45,212,191,0.2); color: #5eead4; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; border: 1px solid rgba(45,212,191,0.3);">下期和值预测: --</span>
+                        </div>
+                    </div>
+                    <div class="chart-desc" style="font-size: 0.85rem; color: #9ca3af; margin-bottom: 15px;">
+                        【极距】最大最小号码差，集中在26-34。【均值回归】正码均值围绕理论中点19.5漂移，展示累积偏差拉拽轨迹。
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; min-height: 250px;">
+                        <div style="position: relative; height: 250px;">
+                            <canvas id="chart-range-span"></canvas>
+                        </div>
+                        <div style="position: relative; height: 250px;">
+                            <canvas id="chart-mean-deviation"></canvas>
+                        </div>
                     </div>
                 </div>
 
@@ -871,7 +968,7 @@
                 </div>
 
                 <!-- 奇偶比分布 -->
-                <div class="chart-card glass">
+                <div class="chart-card glass" id="chart-card-odd-even-consecutive">
                     <h3 class="chart-title">⚖️ 特码单双连号（长龙）频次</h3>
                     <div class="chart-container">
                         <canvas id="chart-odd-even"></canvas>
@@ -879,7 +976,7 @@
                 </div>
 
                 <!-- 大小比分布 -->
-                <div class="chart-card glass">
+                <div class="chart-card glass" id="chart-card-big-small-consecutive">
                     <h3 class="chart-title">📐 特码大小连号（长龙）频次</h3>
                     <div class="chart-container">
                         <canvas id="chart-big-small"></canvas>
@@ -904,45 +1001,6 @@
                     <div
                         style="text-align: center; color: var(--text-secondary); font-size: 11px; margin-top: 16px; letter-spacing: 1px;">
                         ← 左右滑动查阅历史走势 · 最右侧 = 最新特码 →</div>
-                </div>
-
-                <!-- 雷达图：马尔可夫链状态转移 (新增) -->
-                <div class="chart-card glass" id="chart-card-markov">
-                    <div
-                        style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
-                        <h3 class="chart-title" style="margin-bottom: 0;">🎯 马尔可夫链(Markov Chain)状态转移概型</h3>
-
-                        <!-- 算法维度切换 Toggle -->
-                        <div class="algorithm-toggle"
-                            style="display: inline-flex; background: rgba(0,0,0,0.3); padding: 4px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);">
-                            <label style="cursor: pointer; margin: 0; position: relative;">
-                                <input type="radio" name="markov_mode" value="zodiac" checked style="display: none;">
-                                <span class="toggle-btn"
-                                    style="display: inline-block; padding: 6px 14px; font-size: 0.85rem; font-weight: 600; color: #9ca3af; border-radius: 6px; transition: all 0.3s ease;">🐲
-                                    生肖关联</span>
-                            </label>
-                            <label style="cursor: pointer; margin: 0; position: relative;">
-                                <input type="radio" name="markov_mode" value="color" style="display: none;">
-                                <span class="toggle-btn"
-                                    style="display: inline-block; padding: 6px 14px; font-size: 0.85rem; font-weight: 600; color: #9ca3af; border-radius: 6px; transition: all 0.3s ease;">🎨
-                                    波色推演</span>
-                            </label>
-                        </div>
-                        <style>
-                            input[name="markov_mode"]:checked+.toggle-btn {
-                                background: linear-gradient(135deg, rgba(79, 70, 229, 0.8), rgba(67, 56, 202, 0.8));
-                                color: #ffffff;
-                                box-shadow: 0 2px 8px rgba(79, 70, 229, 0.4);
-                            }
-                        </style>
-                    </div>
-
-                    <p style="font-size: 0.75rem; color: #9ca3af; margin-bottom: 8px; line-height: 1.5;">
-                        基于海量历史数据衍生。展示当上一期特码开出中心圆所标识目标时，历史上紧接着下一期开出外围各维度的相对概率权重。雷达波峰越高，历史跃迁倾向越强。
-                    </p>
-                    <div style="position: relative; width: 100%; height: 420px;">
-                        <canvas id="chart-markov-radar"></canvas>
-                    </div>
                 </div>
 
                 <!-- 深度学习 LSTM -->
@@ -989,10 +1047,49 @@
                 </div>
 
                 <!-- 尾数分布 -->
-                <div class="chart-card glass">
+                <div class="chart-card glass" id="chart-card-tail">
                     <h3 class="chart-title">🔢 尾数分布</h3>
                     <div class="chart-container">
                         <canvas id="chart-tail"></canvas>
+                    </div>
+                </div>
+
+                <!-- 雷达图：马尔可夫链状态转移 (新增) -->
+                <div class="chart-card glass" id="chart-card-markov">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+                        <h3 class="chart-title" style="margin-bottom: 0;">🎯 马尔可夫链(Markov Chain)状态转移概型</h3>
+
+                        <!-- 算法维度切换 Toggle -->
+                        <div class="algorithm-toggle"
+                            style="display: inline-flex; background: rgba(0,0,0,0.3); padding: 4px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);">
+                            <label style="cursor: pointer; margin: 0; position: relative;">
+                                <input type="radio" name="markov_mode" value="zodiac" checked style="display: none;">
+                                <span class="toggle-btn"
+                                    style="display: inline-block; padding: 6px 14px; font-size: 0.85rem; font-weight: 600; color: #9ca3af; border-radius: 6px; transition: all 0.3s ease;">🐲
+                                    生肖关联</span>
+                            </label>
+                            <label style="cursor: pointer; margin: 0; position: relative;">
+                                <input type="radio" name="markov_mode" value="color" style="display: none;">
+                                <span class="toggle-btn"
+                                    style="display: inline-block; padding: 6px 14px; font-size: 0.85rem; font-weight: 600; color: #9ca3af; border-radius: 6px; transition: all 0.3s ease;">🎨
+                                    波色推演</span>
+                            </label>
+                        </div>
+                        <style>
+                            input[name="markov_mode"]:checked+.toggle-btn {
+                                background: linear-gradient(135deg, rgba(79, 70, 229, 0.8), rgba(67, 56, 202, 0.8));
+                                color: #ffffff;
+                                box-shadow: 0 2px 8px rgba(79, 70, 229, 0.4);
+                            }
+                        </style>
+                    </div>
+
+                    <p style="font-size: 0.75rem; color: #9ca3af; margin-bottom: 8px; line-height: 1.5;">
+                        基于海量历史数据衍生。展示当上一期特码开出中心圆所标识目标时，历史上紧接着下一期开出外围各维度的相对概率权重。雷达波峰越高，历史跃迁倾向越强。
+                    </p>
+                    <div style="position: relative; width: 100%; height: 420px;">
+                        <canvas id="chart-markov-radar"></canvas>
                     </div>
                 </div>
             </div>
@@ -1025,7 +1122,14 @@
 
                     <!-- 加权维度勾选 -->
                     <div class="sim-dimensions">
-                        <h4 class="dim-title">📐 加权维度选择 <span class="dim-hint">(勾选生效)</span></h4>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+                            <h4 class="dim-title" style="margin: 0; border: none; padding: 0;">📐 加权维度选择 <span class="dim-hint">(勾选生效)</span></h4>
+                            <div class="dim-presets" style="display: flex; gap: 8px;">
+                                <button type="button" onclick="applyDimPreset(['big_small', 'hot_cold', 'markov', 'ac_value', 'range_span'])" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; transition: all 0.2s;">🛡️ 稳健均衡</button>
+                                <button type="button" onclick="applyDimPreset(['tail', 'repeats_tails', 'three_region', 'consecutive'])" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; transition: all 0.2s;">🔥 追热防冷</button>
+                                <button type="button" onclick="applyDimPreset(['lstm', 'bayesian', 'mean_regression', 'prime_composite'])" style="background: rgba(139, 92, 246, 0.15); color: #8b5cf6; border: 1px solid rgba(139, 92, 246, 0.3); padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; transition: all 0.2s;">🤖 纯净 AI</button>
+                            </div>
+                        </div>
                         <div class="dim-checkboxes">
                             <label class="dim-checkbox">
                                 <input type="checkbox" name="dim" value="big_small" checked>
@@ -1063,6 +1167,32 @@
                             <label class="dim-checkbox">
                                 <input type="checkbox" name="dim" value="lstm" checked>
                                 <span class="dim-label">🧠 LSTM 走势</span>
+                            </label>
+
+                            <!-- 威力彩专属高阶维度 -->
+                            <label class="dim-checkbox" style="display: none;">
+                                <input type="checkbox" name="dim" value="three_region">
+                                <span class="dim-label">📊 三分比分析</span>
+                            </label>
+                            <label class="dim-checkbox" style="display: none;">
+                                <input type="checkbox" name="dim" value="prime_composite">
+                                <span class="dim-label">🎨 质合比分析</span>
+                            </label>
+                            <label class="dim-checkbox" style="display: none;">
+                                <input type="checkbox" name="dim" value="repeats_tails">
+                                <span class="dim-label">⚖️ 重号同尾</span>
+                            </label>
+                            <label class="dim-checkbox" style="display: none;">
+                                <input type="checkbox" name="dim" value="ac_value">
+                                <span class="dim-label">🧩 AC值复杂度</span>
+                            </label>
+                            <label class="dim-checkbox" style="display: none;">
+                                <input type="checkbox" name="dim" value="range_span">
+                                <span class="dim-label">📉 极大极距</span>
+                            </label>
+                            <label class="dim-checkbox" style="display: none;">
+                                <input type="checkbox" name="dim" value="mean_regression">
+                                <span class="dim-label">🔄 均值离差</span>
                             </label>
                         </div>
                     </div>
@@ -1239,7 +1369,15 @@
         <p>⚠️ 彩票开奖为独立随机事件，数据分析不构成任何投注建议</p>
     </footer>
 
-    <script src="{{ url_for('static', filename='js/app.js') }}?v=108"></script>
+    <!-- 引入 SortableJS 拖拽库 -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+    <!-- 拆分后的独立图表渲染组件 -->
+    <script src="{{ url_for('static', filename='js/charts/common_charts.js') }}?v={{ range(1, 100000) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/charts/macau_charts.js') }}?v={{ range(1, 100000) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/charts/weilitsai_charts.js') }}?v={{ range(1, 100000) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/charts/advanced_charts.js') }}?v={{ range(1, 100000) | random }}"></script>
+    <!-- 主入口配置 -->
+    <script src="{{ url_for('static', filename='js/app.js') }}?v={{ range(1, 100000) | random }}"></script>
 
     <!-- 设置弹窗 Modal -->
     <div id="settings-modal" class="settings-modal" style="display:none;">
@@ -1290,7 +1428,10 @@
                         <div id="settings-role-rules" style="margin-top:10px;"></div>
                      </div>
                 <div class="settings-section">
-                    <h3>📊 统计图表期数</h3>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <h3 style="margin:0;">📊 统计图表期数</h3>
+                        <button type="button" id="btn-reset-periods" style="padding:4px 10px; background:rgba(245,200,66,0.15); border:1px solid rgba(245,200,66,0.35); color:#fde68a; font-size:0.75rem; font-weight:600; cursor:pointer; border-radius:6px; transition:all 0.2s;" onmouseover="this.style.background='rgba(245,200,66,0.25)'" onmouseout="this.style.background='rgba(245,200,66,0.15)'">🔄 重置默认值</button>
+                    </div>
                     <div class="settings-row"><label>生肖路单</label><input type="number" id="set-zodiac-trend" min="10"
                             max="1000" step="10"></div>
                     <div class="settings-row"><label>单双 K 线</label><input type="number" id="set-odd-even" min="10"
@@ -1310,6 +1451,19 @@
                     </div>
                     <div class="settings-row"><label>AI 原始数据</label><input type="number" id="set-ai-raw" min="10"
                             max="2000" step="50"></div>
+                    <div class="settings-row"><label>极距与均值中心</label><input type="number" id="set-range-distribution" min="10" max="1000" step="10"></div>
+                    <div class="settings-row"><label>三分比与质合</label><input type="number" id="set-three-region" min="10" max="1000" step="10"></div>
+                    <div class="settings-row"><label>泊松与同尾分析</label><input type="number" id="set-poisson-tail" min="10" max="1000" step="10"></div>
+                    <div class="settings-row"><label>AC值与复杂度</label><input type="number" id="set-ac-value" min="10" max="1000" step="10"></div>
+                    <div class="settings-row" id="row-z1-exclusive"><label>1区专属关联</label><input type="number" id="set-z1-exclusive" min="10" max="1000" step="10"></div>
+                </div>
+                <!-- 界面布局区块 -->
+                <div class="settings-section">
+                    <h3>✨ 界面布局</h3>
+                    <div class="settings-row" style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:0.9rem; color:#d1d5db;">图表排列顺序</span>
+                        <button type="button" id="btn-reset-chart-order" style="padding:6px 14px; background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.35); color:#fca5a5; font-size:0.8rem; font-weight:600; cursor:pointer; border-radius:6px; transition:all 0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.25)'" onmouseout="this.style.background='rgba(239,68,68,0.15)'">🔄 恢复默认排列</button>
+                    </div>
                 </div>
                 <!-- 账号管理区块 -->
                 <div class="settings-section">
